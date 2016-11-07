@@ -36,7 +36,7 @@ size_t findNextFrame(File f, size_t startOffset=0)
     enum bufSize = 4096;
     auto buf = new ubyte[bufSize];
     f.seek(startOffset);
-    size_t done = f.tell();
+    auto done = cast(size_t)f.tell();
     bool foundFirstByte = false;
 
     foreach(chunk; f.byChunk(buf))

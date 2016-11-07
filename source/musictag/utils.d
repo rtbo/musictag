@@ -39,7 +39,7 @@ size_t findInFile(File f, const(ubyte)[] pattern, size_t startOffset=-1)
     immutable size_t bufSize = max(4096, nextPow2(pattern.length));
     auto buf = new ubyte[bufSize];
     if (startOffset != -1) f.seek(startOffset);
-    size_t done = f.tell();
+    auto done = cast(size_t)f.tell();
     size_t partial = 0;
 
 mainFileLoop:
