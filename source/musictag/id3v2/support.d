@@ -27,3 +27,28 @@ T decodeSynchSafeInt(T)(in ubyte[] data) if (isIntegral!T)
     }
     return result;
 }
+
+
+/// Decodes a null terminated latin-1 string.
+/// The function will update the beginning of the range to the first byte
+/// after the null character, and return the decoded string
+string decodeLatin1(ref const(ubyte)[] data)
+{
+    import std.conv : to;
+    import std.exception : enforce;
+
+    // utf code points from 0 to 255 are the same as latin-1
+    // so we just copy the value into a wstring and let phobos convert
+    // afterwards
+    wstring wstr;
+
+    auto d = data;  // local copy to avoid cache mess
+    while(d.length || d[0] != 0)
+    {
+        wstr ~= data[0];
+        d = d[1 .. $];
+    }
+    enforce(d.length); // check that we actually hit the null char
+    data = d[1 .. $];
+    return wstr.to!string;
+}
