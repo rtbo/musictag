@@ -4,6 +4,7 @@ import musictag.taggedfile;
 import musictag.tag;
 import musictag.id3v2;
 import musictag.id3v2.header;
+import musictag.id3v2.framefactory;
 import musictag.utils;
 
 import std.stdio : File;
@@ -11,7 +12,9 @@ import std.stdio : File;
 
 /// Reads a tag from the supplied file and returns it.
 /// Returns null if not tag can be read in the file.
-Tag readMpegTag(string filename)
+/// The FrameFactoryDg parameter is optional. It allows applications to add 
+/// support for additional frames, not supported by musictag.
+Tag readMpegTag(string filename, FrameFactoryDg factoryBuilder=null)
 {
     import std.file : exists, isDir;
     import std.stdio : File;
@@ -21,7 +24,7 @@ Tag readMpegTag(string filename)
     auto f = File(filename, "rb");
 
     auto offset = findInFile(f, Header.identifier[]);
-    if (offset != -1) return new Id3v2Tag(f, offset);
+    if (offset != -1) return new Id3v2Tag(f, offset, factoryBuilder);
     else return null;
 }
 

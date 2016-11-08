@@ -3,6 +3,7 @@ module musictag.id3v2;
 import musictag.id3v2.header;
 import musictag.id3v2.extendedheader;
 import musictag.id3v2.footer;
+import musictag.id3v2.framefactory;
 import musictag.id3v2.frame;
 import musictag.tag;
 import std.stdio;
@@ -11,10 +12,10 @@ import std.exception : enforce;
 
 class Id3v2Tag : Tag
 {
-    this(File f, size_t offset)
+    this(File f, size_t offset, FrameFactoryDg factoryDg)
     {
         _offset = offset;
-        read(f);
+        read(f, factoryDg);
     }
 
     @property string filename() const { return _filename; }
@@ -34,7 +35,7 @@ class Id3v2Tag : Tag
 
 private:
 
-    void read(File file)
+    void read(File file, FrameFactoryDg factoryDg)
     {
         import std.algorithm : startsWith;
 
@@ -68,14 +69,21 @@ private:
             frameData = frameData[0 .. $-Footer.size];
         }
 
-        immutable frameHeaderSize = Frame.headerSize(_header.majVersion);
-        while(frameData.length >= frameHeaderSize)
+        if (factoryDg) _frameFactory = factoryDg(_header);
+        else _frameFactory = defaultFrameFactory(_header);
+
+        while(frameData.length > FrameHeader.size)
         {
             // have we hit the padding?
             if (frameData[0] == 0) break;
 
-            auto frame = readFrame(frameData, _header.majVersion);
+            auto frameHeader = FrameHeader.parse(frameData, _header.majVersion);
+            enforce(frameData.length >= FrameHeader.size + frameHeader.frameSize);
+            
+            auto frame = _frameFactory.createFrame(frameHeader, frameData[FrameHeader.size .. $]);
             if (frame) _frames[frame.identifier] = frame;
+
+            frameData = frameData[FrameHeader.size + frameHeader.frameSize .. $];
         }
 
     }
@@ -84,5 +92,6 @@ private:
     size_t _offset;
     Header _header;
     ExtendedHeader _extendedHeader;
+    FrameFactory _frameFactory;
     Frame[string] _frames;
 }
