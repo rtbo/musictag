@@ -6,8 +6,13 @@ import std.exception : enforce;
 
 abstract class Frame
 {
+    this(const ref FrameHeader header)
+    {
+        _header = header;
+    }
+
     @property string identifier() const { return _header.id; }
-    @property FrameHeader header() { return _header; }
+    @property ref const(FrameHeader) header() const { return _header; }
 
 private:
     FrameHeader _header;
