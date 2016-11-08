@@ -34,21 +34,24 @@ T decodeSynchSafeInt(T)(in ubyte[] data) if (isIntegral!T)
 /// after the null character, and return the decoded string
 string decodeLatin1(ref const(ubyte)[] data)
 {
-    import std.conv : to;
     import std.exception : enforce;
+    import std.utf : encode;
 
-    // utf code points from 0 to 255 are the same as latin-1
-    // so we just copy the value into a wstring and let phobos convert
-    // afterwards
-    wstring wstr;
-
+    string res; // do not pre-alloc with data.length: data could be the whole tag!
     auto d = data;  // local copy to avoid cache mess
-    while(d.length || d[0] != 0)
+    char[4] buf;
+
+    while (d.length || d[0] != 0)
     {
-        wstr ~= data[0];
+        immutable dchar c = d[0]; // latin-1 is unicode code points from 0 to 255
+        immutable len = encode(buf, c);
+        res ~= buf[0 .. len];
         d = d[1 .. $];
     }
+
     enforce(d.length); // check that we actually hit the null char
-    data = d[1 .. $];
-    return wstr.to!string;
+    data = d[1 .. $]; // eat null and assign
+    return res;
+}
+
 }
