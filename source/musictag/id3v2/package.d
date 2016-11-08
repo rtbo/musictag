@@ -52,7 +52,7 @@ private:
 
         if (_header.unsynchronize)
         {
-            import musictag.id3v2.synchdata : decodeUnsynchronizedTag;
+            import musictag.id3v2.support : decodeUnsynchronizedTag;
             tagData = decodeUnsynchronizedTag(tagData);
         }
 

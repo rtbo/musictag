@@ -49,7 +49,7 @@ struct FrameHeader
         }
         else if (ver == 4)
         {
-            import musictag.id3v2.synchdata : decodeSynchSafeInt;
+            import musictag.id3v2.support : decodeSynchSafeInt;
             res._frameSize = decodeSynchSafeInt!uint(data[4 .. 8]);
 
             res._tagAlterPreserve = cast(bool)(data[8] & 0b0100_0000);

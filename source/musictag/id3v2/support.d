@@ -1,4 +1,4 @@
-module musictag.id3v2.synchdata;
+module musictag.id3v2.support;
 
 import std.traits : isIntegral;
 

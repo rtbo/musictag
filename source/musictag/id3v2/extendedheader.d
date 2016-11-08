@@ -17,7 +17,7 @@ class ExtendedHeader
         }
         else
         {
-            import musictag.id3v2.synchdata : decodeSynchSafeInt;
+            import musictag.id3v2.support : decodeSynchSafeInt;
             _size = decodeSynchSafeInt!size_t(data[0 .. 4]);
         }
     }
