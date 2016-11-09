@@ -67,7 +67,7 @@ string decodeLatin1(ref const(ubyte)[] data)
     string res; // do not pre-alloc with data.length: data could be the whole tag!
     auto d = data;  // local copy to avoid cache mess
     char[4] buf = void;
-    
+
     while (d.length && d[0] != 0)
     {
         immutable dchar c = d[0]; // latin-1 is unicode code points from 0 to 255
@@ -99,7 +99,7 @@ string decodeUTF16BOM(ref const(ubyte)[] data)
     }
 
     enforce(data.length >= 4); // BOM + null
-    auto bom = data[0 .. 2];
+    immutable bom = data[0 .. 2];
     data = data[2 .. $];
 
     if (bom == nativeBOM)
@@ -151,7 +151,7 @@ string decodeNativeUTF16(ref const(ubyte)[] data)
 
     while (index < w.length && w[index] != 0)
     {
-        immutable dchar c = decode(w, index); 
+        immutable dchar c = decode(w, index);
         immutable len = encode(buf, c);
         res ~= buf[0 .. len];
     }
@@ -162,7 +162,7 @@ string decodeNativeUTF16(ref const(ubyte)[] data)
 }
 
 string decodeReverseUTF16(ref const(ubyte)[] data)
-{    
+{
     import std.uni : isSurrogateHi;
     import std.utf : decodeFront, encode;
 
@@ -185,10 +185,12 @@ string decodeReverseUTF16(ref const(ubyte)[] data)
         auto range = wbuf[0 .. units];
         immutable dchar c = decodeFront(range);
         enforce(!range.length); // or assert?
+        immutable len = encode(c, buf);
+        res ~= buf[0 .. len];
         d = d[2 .. $];
         units = 1;
     }
-    
+
     enforce(d.length >= 2 && d[0] == 0 && d[1] == 0);
     data = d[2 .. $]; // eat null char and assign
     return res;
