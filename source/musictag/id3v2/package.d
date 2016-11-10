@@ -78,12 +78,13 @@ private:
             if (frameData[0] == 0) break;
 
             auto frameHeader = FrameHeader.parse(frameData, _header.majVersion);
-            enforce(frameData.length >= FrameHeader.size + frameHeader.frameSize);
-            
-            auto frame = _frameFactory.createFrame(frameHeader, frameData[FrameHeader.size .. $]);
+            immutable frameEnd = FrameHeader.size + frameHeader.frameSize;
+            enforce(frameData.length >= frameEnd);
+
+            auto frame = _frameFactory.createFrame(frameHeader, frameData[FrameHeader.size .. frameEnd]);
             if (frame) _frames[frame.identifier] = frame;
 
-            frameData = frameData[FrameHeader.size + frameHeader.frameSize .. $];
+            frameData = frameData[frameEnd .. $];
         }
 
     }
