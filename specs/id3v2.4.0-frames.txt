@@ -401,7 +401,7 @@ Abstract
    define your own. Example: "21" $00 "Eurodisco" $00
 
    You may also use any of the following keywords:
-   
+
      RX  Remix
      CR  Cover
 
@@ -1274,7 +1274,7 @@ Abstract
 
    The "USER" frame may be linked with the language field as additional
    ID data.
-   
+
    The "PRIV" frame may be linked with the owner identifier as
    additional ID data.
 
@@ -1566,7 +1566,7 @@ Abstract
 
    [ID3v2-strct] Martin Nilsson,
    "ID3 tag version 2.4.0 - Main Structure"
-   
+
       <url:http//www.id3.org/id3v2.4.0-structure.txt>
 
    [ISO-639-2] ISO/FDIS 639-2.
