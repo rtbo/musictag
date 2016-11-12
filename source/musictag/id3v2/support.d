@@ -32,10 +32,11 @@ T decodeSynchSafeInt(T)(in ubyte[] data) if (isIntegral!T)
 
 // String decoding functions
 
-/// Decodes a null terminating string with the given encoding byte
+/// Transcodes the give bytes from the given encoding byte to utf-8.
 /// (specs/id3v2.4.0-structure.txt §4).
-/// Advances data to the byte after the null character and returns the string
-/// encoded in utf-8.
+/// The string can be null terminated. In this case data is advanced
+/// to the byte after the null character. Otherwise, data is advanced
+/// until its end.
 string decodeString(ref const(ubyte)[] data, in ubyte encodingByte)
 {
     switch(encodingByte)
@@ -57,9 +58,10 @@ string decodeString(ref const(ubyte)[] data, in ubyte encodingByte)
     }
 }
 
-/// Decodes a null terminated latin-1 string.
-/// The function will update the beginning of the range to the first byte
-/// after the null character, and return the decoded string
+/// Transcodes a latin-1 string to utf-8.
+/// The string can be null terminated. In this case data is advanced
+/// to the byte after the null character. Otherwise, data is advanced
+/// until its end.
 string decodeLatin1(ref const(ubyte)[] data)
 {
     import std.utf : encode;
@@ -76,15 +78,16 @@ string decodeLatin1(ref const(ubyte)[] data)
         d = d[1 .. $];
     }
 
-    enforce(d.length); // check that we actually hit the null char
-    data = d[1 .. $]; // eat null and assign
+    if (d.length) data = d[1 .. $];
+    else data = d;
+
     return res;
 }
 
-/// Decodes a null terminated UTF16 string starting with BOM.
-/// Throws if string does not start with BOM or if null char is not found.
-/// The function will advance the data range to the first byte
-/// after the null character, and return the string encoded as utf-8.
+/// Transcodes a UTF-16 string with BOM to utf-8.
+/// The string can be null terminated. In this case data is advanced
+/// to the byte after the null character. Otherwise, data is advanced
+/// until its end.
 string decodeUTF16BOM(ref const(ubyte)[] data)
 {
     version(BigEndian)
@@ -98,8 +101,8 @@ string decodeUTF16BOM(ref const(ubyte)[] data)
         enum ubyte[] reverseBOM = [0xfe, 0xff];
     }
 
-    enforce(data.length >= 4); // BOM + null
-    immutable bom = data[0 .. 2];
+    enforce(data.length >= 2); // BOM
+    const bom = data[0 .. 2];
     data = data[2 .. $];
 
     if (bom == nativeBOM)
@@ -143,8 +146,6 @@ string decodeNativeUTF16(ref const(ubyte)[] data)
     auto wptr = cast(const(wchar)*)data.ptr;
     auto w = wptr[0 .. data.length/2];
 
-    assert(w.length >= 1);
-
     string res;
     char[4] buf = void;
     size_t index = 0;
@@ -156,7 +157,7 @@ string decodeNativeUTF16(ref const(ubyte)[] data)
         res ~= buf[0 .. len];
     }
 
-    enforce(index < w.length && w[index] == 0);
+    if (index < w.length) ++index; // eat null
     data = data[index*2 .. $];
     return res;
 }
@@ -165,7 +166,6 @@ string decodeReverseUTF16(ref const(ubyte)[] data)
 {
     import std.uni : isSurrogateHi;
     import std.utf : decodeFront, encode;
-
 
     string res;
     char[4] buf = void;
@@ -185,7 +185,7 @@ string decodeReverseUTF16(ref const(ubyte)[] data)
         auto range = wbuf[0 .. units];
         immutable dchar c = decodeFront(range);
         enforce(!range.length); // or assert?
-        immutable len = encode(c, buf);
+        immutable len = encode(buf, c);
         res ~= buf[0 .. len];
         d = d[2 .. $];
         units = 1;
