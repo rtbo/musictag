@@ -14,16 +14,16 @@ class UFIDFrame : Frame
         assert(header.id == "UFID");
         super(header);
         _owner = decodeLatin1(data);
-        _data = data.dup;
+        _data = data.idup;
     }
 
     @property string owner() const { return _owner; }
-    @property inout(ubyte)[] data() inout { return _data; }
+    @property immutable(ubyte)[] data() const { return _data; }
 
 private:
 
     string _owner;
-    ubyte[] _data;
+    immutable(ubyte)[] _data;
 }
 
 
@@ -109,21 +109,23 @@ private:
     string _link;
 }
 
+
 class MusicCDIdentifierFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
     {
         assert(header.id == "MCDI");
         super(header);
-        _data = data.dup;
+        _data = data.idup;
     }
 
-    @property inout(ubyte)[] data() inout { return _data; }
+    @property immutable(ubyte)[] data() const { return _data; }
 
 private:
 
-    ubyte[] _data;
+    immutable(ubyte)[] _data;
 }
+
 
 class EventTimingCodeFrame : Frame
 {
@@ -206,12 +208,12 @@ class EventTimingCodeFrame : Frame
     }
 
     @property TimeUnit timeUnit() const { return _timeUnit; }
-    @property inout(Event)[] events() inout { return _events; }
+    @property immutable(Event)[] events() inout { return _events; }
 
 private:
 
     TimeUnit _timeUnit;
-    Event[] _events;
+    immutable(Event)[] _events;
 }
 
 
@@ -252,12 +254,12 @@ class SyncTempoCodes : Frame
     }
 
     @property TimeUnit timeUnit() const { return _timeUnit; }
-    @property inout(Tempo)[] tempos() inout { return _tempos; }
+    @property immutable(Tempo)[] tempos() inout { return _tempos; }
 
 private:
 
     TimeUnit _timeUnit;
-    Tempo[] _tempos;
+    immutable(Tempo)[] _tempos;
 
 }
 
@@ -336,7 +338,7 @@ class SyncLyricsFrame : Frame
     @property TimeUnit timeUnit() const { return _timeUnit; }
     @property ContentType contentType() const { return _contentType; }
     @property string content() const { return _content; }
-    @property inout(TextChunk)[] chunks() inout { return _chunks; }
+    @property immutable(TextChunk)[] chunks() inout { return _chunks; }
 
 private:
 
@@ -344,7 +346,7 @@ private:
     TimeUnit _timeUnit;
     ContentType _contentType;
     string _content;
-    TextChunk[] _chunks;
+    immutable(TextChunk)[] _chunks;
 }
 
 
@@ -394,7 +396,7 @@ class RelativeVolumeAdjustFrame : Frame
         Channel channel;
         float volumeAdjustment;
         ubyte bitsRepresentingPeak;
-        ubyte[] peakVolume;
+        immutable(ubyte)[] peakVolume;
     }
 
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -408,10 +410,10 @@ class RelativeVolumeAdjustFrame : Frame
             immutable volAdj = decodeBigEndian!short(data[1 .. 3]) / 512f;
             immutable bitsPeak = data[3];
             immutable bytesForPeak = (bitsPeak + 7) / 8;
-            ubyte[] peak;
+            immutable(ubyte)[] peak;
             if (bytesForPeak) {
                 if (data.length < bytesForPeak+4) break;
-                peak = data[4 .. 4+bytesForPeak].dup;
+                peak = data[4 .. 4+bytesForPeak].idup;
             }
             _channelAdjusts ~= ChannelAdjust(
                 ch, volAdj, bitsPeak, peak
@@ -421,7 +423,7 @@ class RelativeVolumeAdjustFrame : Frame
     }
 
     @property string identification() const { return _identification; }
-    @property const(ChannelAdjust)[] channelAdjusts() const
+    @property immutable(ChannelAdjust)[] channelAdjusts() const
     {
         return _channelAdjusts;
     }
@@ -429,7 +431,7 @@ class RelativeVolumeAdjustFrame : Frame
 private:
 
     string _identification;
-    ChannelAdjust[] _channelAdjusts;
+    immutable(ChannelAdjust)[] _channelAdjusts;
 
 }
 
@@ -464,11 +466,15 @@ class EqualisationFrame : Frame
         }
     }
 
+    @property InterpMethod method() const { return _method; }
+    @property string identification() const { return _identification; }
+    @property immutable(Band)[] bands() const { return _bands; }
+
 private:
 
     InterpMethod _method;
     string _identification;
-    Band[] _bands;
+    immutable(Band)[] _bands;
 }
 
 
@@ -553,19 +559,19 @@ class AttachedPictureFrame : Frame
         _pictureType = cast(PictureType)data[0];
         data = data[1 .. $];
         _description = decodeString(data, encodingByte);
-        _data = data.dup;
+        _data = data.idup;
     }
 
     @property string mimeType() const { return _mimeType; }
     @property PictureType pictureType() const { return _pictureType; }
     @property string description() const { return _description; }
-    @property const(ubyte)[] data() const { return _data; }
+    @property immutable(ubyte)[] data() const { return _data; }
 
 private:
     string _mimeType;
     PictureType _pictureType;
     string _description;
-    ubyte[] _data;
+    immutable(ubyte)[] _data;
 }
 
 class GeneralEncapsulatedObjectFrame : Frame
@@ -579,19 +585,19 @@ class GeneralEncapsulatedObjectFrame : Frame
         _mimeType = decodeLatin1(data);
         _filename = decodeString(data, encodingByte);
         _description = decodeString(data, encodingByte);
-        _objectData = data.dup;
+        _objectData = data.idup;
     }
 
     @property string mimeType() const { return _mimeType; }
     @property string filename() const { return _filename; }
     @property string description() const { return _description; }
-    @property const(ubyte)[] objectData() const { return _objectData; }
+    @property immutable(ubyte)[] objectData() const { return _objectData; }
 
 private:
     string _mimeType;
     string _filename;
     string _description;
-    ubyte[] _objectData;
+    immutable(ubyte)[] _objectData;
 }
 
 
@@ -644,13 +650,13 @@ class AudioEncryptionFrame : Frame
         enforce(data.length > 4);
         _previewStart = decodeBigEndian!ushort(data[0 .. 2]);
         _previewLength = decodeBigEndian!ushort(data[2 .. 4]);
-        _encryptionInfo = data[4 .. $].dup;
+        _encryptionInfo = data[4 .. $].idup;
     }
 
     @property string owner() const { return _owner; }
     @property ushort previewStart() const { return _previewStart; }
     @property ushort previewLength() const { return _previewLength; }
-    @property const(ubyte)[] encryptionInfo() const {
+    @property immutable(ubyte)[] encryptionInfo() const {
         return _encryptionInfo;
     }
 
@@ -658,7 +664,7 @@ private:
     string _owner;
     ushort _previewStart;
     ushort _previewLength;
-    ubyte[] _encryptionInfo;
+    immutable(ubyte)[] _encryptionInfo;
 }
 
 
@@ -702,7 +708,7 @@ class CommercialFrame : Frame
         _seller = decodeString(data, encodingByte);
         _description = decodeString(data, encodingByte);
         _pictureMimeType = decodeLatin1(data);
-        _pictureData = data.dup;
+        _pictureData = data.idup;
     }
 
     @property string price() const { return _price; }
@@ -712,7 +718,7 @@ class CommercialFrame : Frame
     @property string seller() const { return _seller; }
     @property string description() const { return _description; }
     @property string pictureMimeType() const { return _pictureMimeType; }
-    @property const(ubyte)[] pictureData() const { return _pictureData; }
+    @property immutable(ubyte)[] pictureData() const { return _pictureData; }
 
 
 private:
@@ -724,7 +730,7 @@ private:
     string _seller;
     string _description;
     string _pictureMimeType;
-    ubyte[] _pictureData;
+    immutable(ubyte)[] _pictureData;
 }
 
 
@@ -735,15 +741,15 @@ class PrivateFrame : Frame
         assert(header.id == "PRIV");
         super(header);
         _owner = decodeLatin1(data);
-        _data = data.dup;
+        _data = data.idup;
     }
 
     @property string owner() const { return _owner; }
-    @property const(ubyte)[] data() const {
+    @property immutable(ubyte)[] data() const {
         return _data;
     }
 
 private:
     string _owner;
-    ubyte[] _data;
+    immutable(ubyte)[] _data;
 }
