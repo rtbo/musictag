@@ -7,6 +7,7 @@ import musictag.utils : decodeBigEndian;
 import std.exception : enforce;
 
 
+/// UFID id3v2 frame
 class UFIDFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -27,6 +28,7 @@ private:
 }
 
 
+/// Text (T***) id3v2 frame
 class TextFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -47,6 +49,7 @@ private:
 }
 
 
+/// TXXX id3v2 frame
 class UserTextFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -70,6 +73,7 @@ private:
 }
 
 
+/// Link (W***) id3v2 frame
 class LinkFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -87,6 +91,7 @@ private:
 }
 
 
+/// WXXX id3v2 frame
 class UserLinkFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -110,6 +115,7 @@ private:
 }
 
 
+/// MCDI id3v2 frame
 class MusicCDIdentifierFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -127,6 +133,7 @@ private:
 }
 
 
+/// ETCO id3v2 frame
 class EventTimingCodeFrame : Frame
 {
     enum TimeUnit {
@@ -217,6 +224,7 @@ private:
 }
 
 
+/// SYTC id3v2 frame
 class SyncTempoCodes : Frame
 {
     enum TimeUnit {
@@ -264,6 +272,7 @@ private:
 }
 
 
+/// USLT id3v2 frame
 class LyricsFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -290,6 +299,7 @@ private:
 }
 
 
+/// SYLT id3v2 frame
 class SyncLyricsFrame : Frame
 {
     enum TimeUnit {
@@ -350,8 +360,7 @@ private:
 }
 
 
-
-
+/// COMM id3v2 frame
 class CommentsFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -378,6 +387,7 @@ private:
 }
 
 
+/// RVA2 id3v2 frame
 class RelativeVolumeAdjustFrame : Frame
 {
     enum Channel {
@@ -436,6 +446,7 @@ private:
 }
 
 
+/// EQU2 id3v2 frame
 class EqualisationFrame : Frame
 {
     enum InterpMethod
@@ -478,6 +489,7 @@ private:
 }
 
 
+/// RVRB id3v2 frame
 class ReverbFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -522,6 +534,7 @@ private:
 }
 
 
+/// APIC id3v2 frame
 class AttachedPictureFrame : Frame
 {
     enum PictureType
@@ -574,6 +587,8 @@ private:
     immutable(ubyte)[] _data;
 }
 
+
+/// GEOB id3v2 frame
 class GeneralEncapsulatedObjectFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -601,6 +616,7 @@ private:
 }
 
 
+/// PCNT id3v2 frame
 class PlayCounterFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -617,6 +633,7 @@ private:
 }
 
 
+/// POPM id3v2 frame
 class PopularimeterFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -640,6 +657,7 @@ private:
 }
 
 
+/// AENC id3v2 frame
 class AudioEncryptionFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
@@ -668,6 +686,7 @@ private:
 }
 
 
+/// COMR id3v2 frame
 class CommercialFrame : Frame
 {
     import std.datetime : Date;
@@ -734,6 +753,7 @@ private:
 }
 
 
+/// PRIV id3v2 frame
 class PrivateFrame : Frame
 {
     this(const ref FrameHeader header, const(ubyte)[] data)
