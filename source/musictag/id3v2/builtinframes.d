@@ -470,3 +470,193 @@ private:
     string _identification;
     Band[] _bands;
 }
+
+
+class ReverbFrame : Frame
+{
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "RVRB");
+        super(header);
+        enforce(data.length >= 12);
+        _delayLeft = decodeBigEndian!ushort(data[0 .. 2]);
+        _delayRight = decodeBigEndian!ushort(data[2 .. 4]);
+        _bouncesLeft = data[4];
+        _bouncesRight = data[5];
+        _feedbackLeftLeft = data[6];
+        _feedbackLeftRight = data[7];
+        _feedbackRightRight = data[8];
+        _feedbackRightLeft = data[9];
+        _premixLeftRight = data[10];
+        _premixRightLeft = data[11];
+    }
+
+    @property ushort delayLeft() const { return _delayLeft; }
+    @property ushort delayRight() const { return _delayRight; }
+    @property ubyte bouncesLeft() const { return _bouncesLeft; }
+    @property ubyte bouncesRight() const { return _bouncesRight; }
+    @property ubyte feedbackLeftLeft() const { return _feedbackLeftLeft; }
+    @property ubyte feedbackLeftRight() const { return _feedbackLeftRight; }
+    @property ubyte feedbackRightRight() const { return _feedbackRightRight; }
+    @property ubyte feedbackRightLeft() const { return _feedbackRightLeft; }
+    @property ubyte premixLeftRight() const { return _premixLeftRight; }
+    @property ubyte premixRightLeft() const { return _premixRightLeft; }
+
+private:
+    ushort _delayLeft;
+    ushort _delayRight;
+    ubyte _bouncesLeft;
+    ubyte _bouncesRight;
+    ubyte _feedbackLeftLeft;
+    ubyte _feedbackLeftRight;
+    ubyte _feedbackRightRight;
+    ubyte _feedbackRightLeft;
+    ubyte _premixLeftRight;
+    ubyte _premixRightLeft;
+}
+
+
+class AttachedPictureFrame : Frame
+{
+    enum PictureType
+    {
+        Other               = 0x00,
+        fileIcon32x32       = 0x01,
+        fileIconOther       = 0x02,
+        CoverFront          = 0x03,
+        CoverBack           = 0x04,
+        LeafletPage         = 0x05,
+        Media               = 0x06,
+        LeadArtist          = 0x07,
+        Artist              = 0x08,
+        Conductor           = 0x09,
+        Band                = 0x0A,
+        Composer            = 0x0B,
+        Lyricist            = 0x0C,
+        RecordingLocation   = 0x0D,
+        DuringRecording     = 0x0E,
+        DuringPerformance   = 0x0F,
+        MovieCapture        = 0x10,
+        BrightColouredFish  = 0x11,  // ??
+        Illustration        = 0x12,
+        BandLogotype        = 0x13,
+        PublisherLogotype   = 0x14,
+    }
+
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "APIC");
+        super(header);
+        immutable encodingByte = data[0];
+        data = data[1 .. $];
+        _mimeType = decodeLatin1(data);
+        _pictureType = cast(PictureType)data[0];
+        data = data[1 .. $];
+        _description = decodeString(data, encodingByte);
+        _data = data.dup;
+    }
+
+    @property string mimeType() const { return _mimeType; }
+    @property PictureType pictureType() const { return _pictureType; }
+    @property string description() const { return _description; }
+    @property const(ubyte)[] data() const { return _data; }
+
+private:
+    string _mimeType;
+    PictureType _pictureType;
+    string _description;
+    ubyte[] _data;
+}
+
+class GeneralEncapsulatedObjectFrame : Frame
+{
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "GEOB");
+        super(header);
+        immutable encodingByte = data[0];
+        data = data[1 .. $];
+        _mimeType = decodeLatin1(data);
+        _filename = decodeString(data, encodingByte);
+        _description = decodeString(data, encodingByte);
+        _objectData = data.dup;
+    }
+
+    @property string mimeType() const { return _mimeType; }
+    @property string filename() const { return _filename; }
+    @property string description() const { return _description; }
+    @property const(ubyte)[] objectData() const { return _objectData; }
+
+private:
+    string _mimeType;
+    string _filename;
+    string _description;
+    ubyte[] _objectData;
+}
+
+
+class PlayCounterFrame : Frame
+{
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "PCNT");
+        super(header);
+        _count = decodeBigEndian!size_t(data);
+    }
+
+    @property size_t count() const { return _count; }
+
+private:
+    size_t _count;
+}
+
+
+class PopularimeterFrame : Frame
+{
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "POPM");
+        super(header);
+
+        _email = decodeLatin1(data);
+        _rating = data[0];
+        _count = decodeBigEndian!size_t(data[1 .. $]);
+    }
+
+    @property string email() const { return _email; }
+    @property ubyte rating() const { return _rating; }
+    @property size_t count() const { return _count; }
+
+private:
+    string _email;
+    ubyte _rating;
+    size_t _count;
+}
+
+
+class AudioEncryptionFrame : Frame
+{
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "AENC");
+        super(header);
+        _owner = decodeLatin1(data);
+        enforce(data.length > 4);
+        _previewStart = decodeBigEndian!ushort(data[0 .. 2]);
+        _previewLength = decodeBigEndian!ushort(data[2 .. 4]);
+        _encryptionInfo = data[4 .. $].dup;
+    }
+
+    @property string owner() const { return _owner; }
+    @property ushort previewStart() const { return _previewStart; }
+    @property ushort previewLength() const { return _previewLength; }
+    @property const(ubyte)[] encryptionInfo() const {
+        return _encryptionInfo;
+    }
+
+private:
+    string _owner;
+    ushort _previewStart;
+    ushort _previewLength;
+    ubyte[] _encryptionInfo;
+}

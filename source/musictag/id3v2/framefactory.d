@@ -63,6 +63,18 @@ class DefaultFrameFactory : FrameFactory
             return new RelativeVolumeAdjustFrame(header, data);
         else if (header.id == "EQU2")
             return new EqualisationFrame(header, data);
+        else if (header.id == "RVRB")
+            return new ReverbFrame(header, data);
+        else if (header.id == "APIC")
+            return new AttachedPictureFrame(header, data);
+        else if (header.id == "GEOB")
+            return new GeneralEncapsulatedObjectFrame(header, data);
+        else if (header.id == "PCNT")
+            return new PlayCounterFrame(header, data);
+        else if (header.id == "POPM")
+            return new PopularimeterFrame(header, data);
+        else if (header.id == "AENC")
+            return new AudioEncryptionFrame(header, data);
         return null;
     }
 
