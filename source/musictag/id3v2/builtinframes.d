@@ -197,7 +197,10 @@ class EventTimingCodeFrame : Frame
         _timeUnit = cast(TimeUnit)data[0];
         data = data[1 .. $];
         while(data.length >= 5) {
-            _events ~= Event(cast(EventType)data[0], decodeBigEndian!uint(data[1 .. 5]));
+            _events ~= Event(
+                cast(EventType)data[0],
+                decodeBigEndian!uint(data[1 .. 5])
+            );
             data = data[5 .. $];
         }
     }
@@ -342,4 +345,128 @@ private:
     ContentType _contentType;
     string _content;
     TextChunk[] _chunks;
+}
+
+
+
+
+class CommentsFrame : Frame
+{
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "COMM");
+        super(header);
+        enforce(data.length > 4);
+        immutable encodingByte = data[0];
+        _lang[] = data[1 .. 4];
+        data = data[4 .. $];
+        _content = decodeString(data, encodingByte);
+        _text = decodeString(data, encodingByte);
+    }
+
+    @property ubyte[3] lang() const { return _lang; }
+    @property string content() const { return _content; }
+    @property string text() const { return _text; }
+
+private:
+
+    ubyte[3] _lang;
+    string _content;
+    string _text;
+}
+
+
+class RelativeVolumeAdjustFrame : Frame
+{
+    enum Channel {
+        Other            = 0x00,
+        MasterVolume     = 0x01,
+        FrontRight       = 0x02,
+        FrontLeft        = 0x03,
+        BackRight        = 0x04,
+        BackLeft         = 0x05,
+        FrontCentre      = 0x06,
+        BackCentre       = 0x07,
+        Subwoofer        = 0x08,
+    }
+
+    struct ChannelAdjust {
+        Channel channel;
+        float volumeAdjustment;
+        ubyte bitsRepresentingPeak;
+        ubyte[] peakVolume;
+    }
+
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "RVA2");
+        super(header);
+        _identification = decodeLatin1(data);
+        while(data.length > 4)
+        {
+            immutable ch = cast(Channel)data[0];
+            immutable volAdj = decodeBigEndian!short(data[1 .. 3]) / 512f;
+            immutable bitsPeak = data[3];
+            immutable bytesForPeak = (bitsPeak + 7) / 8;
+            ubyte[] peak;
+            if (bytesForPeak) {
+                if (data.length < bytesForPeak+4) break;
+                peak = data[4 .. 4+bytesForPeak].dup;
+            }
+            _channelAdjusts ~= ChannelAdjust(
+                ch, volAdj, bitsPeak, peak
+            );
+            data = data[4*bytesForPeak .. $];
+        }
+    }
+
+    @property string identification() const { return _identification; }
+    @property const(ChannelAdjust)[] channelAdjusts() const
+    {
+        return _channelAdjusts;
+    }
+
+private:
+
+    string _identification;
+    ChannelAdjust[] _channelAdjusts;
+
+}
+
+
+class EqualisationFrame : Frame
+{
+    enum InterpMethod
+    {
+        Band = 0x00,
+        Linear = 0x01,
+    }
+
+    struct Band {
+        float frequency;
+        float volumeAdjustment;
+    }
+
+    this (const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "EQU2");
+        super(header);
+        _method = cast(InterpMethod)data[0];
+        data = data[1 .. $];
+        _identification = decodeLatin1(data);
+        while (data.length >= 4)
+        {
+            _bands ~= Band(
+                decodeBigEndian!ushort(data[0 .. 2]) / 2f,
+                decodeBigEndian!short(data[2 .. 4]) / 512f,
+            );
+            data = data[4 .. $];
+        }
+    }
+
+private:
+
+    InterpMethod _method;
+    string _identification;
+    Band[] _bands;
 }

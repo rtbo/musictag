@@ -47,6 +47,22 @@ class DefaultFrameFactory : FrameFactory
             return new LinkFrame(header, data);
         else if (header.id == "WXXX")
             return new UserLinkFrame(header, data);
+        else if (header.id == "MCDI")
+            return new MusicCDIdentifierFrame(header, data);
+        else if (header.id == "ETCO")
+            return new EventTimingCodeFrame(header, data);
+        else if (header.id == "SYTC")
+            return new SyncTempoCodes(header, data);
+        else if (header.id == "USLT")
+            return new LyricsFrame(header, data);
+        else if (header.id == "SYLT")
+            return new SyncLyricsFrame(header, data);
+        else if (header.id == "COMM")
+            return new CommentsFrame(header, data);
+        else if (header.id == "RVA2")
+            return new RelativeVolumeAdjustFrame(header, data);
+        else if (header.id == "EQU2")
+            return new EqualisationFrame(header, data);
         return null;
     }
 
