@@ -10,6 +10,7 @@ import std.stdio;
 import std.exception : enforce;
 
 
+/// An ID3V2 tag
 class Id3v2Tag : Tag
 {
     this(File f, size_t offset, FrameFactoryDg factoryDg)
@@ -18,21 +19,84 @@ class Id3v2Tag : Tag
         read(f, factoryDg);
     }
 
+    /// Implementation of Tag interface
     @property string filename() const { return _filename; }
+
+    /// ditto
     @property Format format() const { return Format.Id3v2; }
 
-    @property string frame(string identifier) const { return ""; }
+    /// ditto
+    @property string artist() const
+    {
+        return textFrame("TPE1");
+    }
 
-    @property string artist() const { return ""; }
-    @property string title() const { return ""; }
-    @property int track() const { return 0; }
-    @property string composer() const { return ""; }
-    @property string year() const { return ""; }
+    /// ditto
+    @property string title() const
+    {
+        return textFrame("TIT2");
+    }
+
+    /// ditto
+    @property int track() const
+    {
+        immutable trck = textFrame("TRCK");
+        if (trck.length)
+        {
+            import std.array : split;
+            import std.conv : to;
+            return trck.split("/")[0].to!int;
+        }
+        return -1;
+    }
+
+    /// ditto
+    @property int pos() const
+    {
+        immutable tpos = textFrame("TPOS");
+        if (tpos.length)
+        {
+            import std.array : split;
+            import std.conv : to;
+            return tpos.split("/")[0].to!int;
+        }
+        return -1;
+    }
+
+    /// ditto
+    @property string composer() const
+    {
+        return textFrame("TCOM");
+    }
+
+    /// ditto
+    @property int year() const
+    {
+        immutable tdrl = textFrame("TDRL");
+        if (tdrl.length >= 4)
+        {
+            import std.conv : to;
+            return tdrl[0 .. 4].to!int;
+        }
+        return -1;
+    }
+
+    /// ditto
     @property const(byte)[] picture() const { return []; }
 
+    /// Offset the tag is located (most often 0 with id3v2)
     @property size_t offset() const { return _offset; }
-    @property size_t size() const { return _header.tagSize; }
 
+    /// Get the value of a text frame
+    @property string textFrame(string identifier) const {
+        auto frame = identifier in _frames;
+        if (frame) {
+            import musictag.id3v2.builtinframes : TextFrame;
+            auto textFrame = cast(const(TextFrame))(*frame);
+            if (textFrame) return textFrame.text;
+        }
+        return "";
+    }
 private:
 
     void read(File file, FrameFactoryDg factoryDg)
