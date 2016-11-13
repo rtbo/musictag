@@ -2,6 +2,7 @@ module musictag.id3v2.builtinframes;
 
 import musictag.id3v2.frame;
 import musictag.id3v2.support;
+import musictag.utils : decodeBigEndian;
 
 import std.exception : enforce;
 
@@ -190,11 +191,9 @@ class EventTimingCodeFrame : Frame
 
     this(const ref FrameHeader header, const(ubyte)[] data)
     {
-        import musictag.utils : decodeBigEndian;
-
         assert(header.id == "ETCO");
         super(header);
-        enforce(data >= 1);
+        enforce(data.length >= 1);
         _timeUnit = cast(TimeUnit)data[0];
         data = data[1 .. $];
         while(data.length >= 5) {
@@ -210,4 +209,137 @@ private:
 
     TimeUnit _timeUnit;
     Event[] _events;
+}
+
+
+class SyncTempoCodes : Frame
+{
+    enum TimeUnit {
+        MpegFrame       = 0x01,
+        Milliseconds    = 0x02,
+    }
+
+    struct Tempo {
+        /// Beats per minutes of this tempo.
+        /// Special value 0 indicates beat free
+        /// Special value 1 indicates a single beat followed by beat free
+        /// >= 2 means actual BPM
+        ushort bpm;
+        uint time;
+    }
+
+    this (ref const FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "SYTC");
+        super(header);
+        enforce(data.length > 1);
+        _timeUnit = cast(TimeUnit)data[0];
+        data = data[1 .. $];
+        while(data.length >= 5) {
+            ushort bpm = data[0];
+            if (bpm == 0xff) {
+                bpm += data[1];
+                data = data[1 .. $];
+                if (data.length < 5) break;
+            }
+            immutable time = decodeBigEndian!uint(data[1 .. 5]);
+            _tempos ~= Tempo(bpm, time);
+            data = data[5 .. $];
+        }
+    }
+
+    @property TimeUnit timeUnit() const { return _timeUnit; }
+    @property inout(Tempo)[] tempos() inout { return _tempos; }
+
+private:
+
+    TimeUnit _timeUnit;
+    Tempo[] _tempos;
+
+}
+
+
+class LyricsFrame : Frame
+{
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "USLT");
+        super(header);
+        enforce(data.length > 4);
+        immutable encodingByte = data[0];
+        _lang[] = data[1 .. 4];
+        data = data[4 .. $];
+        _content = decodeString(data, encodingByte);
+        _text = decodeString(data, encodingByte);
+    }
+
+    @property ubyte[3] lang() const { return _lang; }
+    @property string content() const { return _content; }
+    @property string text() const { return _text; }
+
+private:
+
+    ubyte[3] _lang;
+    string _content;
+    string _text;
+}
+
+
+class SyncLyricsFrame : Frame
+{
+    enum TimeUnit {
+        MpegFrame       = 0x01,
+        Milliseconds    = 0x02,
+    }
+
+    enum ContentType {
+        Other               = 0x00,
+        Lyrics              = 0x01,
+        TextTranscription   = 0x02,
+        MovementName        = 0x03,
+        Events              = 0x04,
+        Chord               = 0x05,
+        Trivia              = 0x06,
+        WebPagesURLs        = 0x07,
+        ImagesURLs          = 0x08,
+    }
+
+    struct TextChunk {
+        string text;
+        uint time;
+    }
+
+    this (const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "SYLT");
+        super(header);
+        enforce(data.length > 6);
+        immutable encodingByte = data[0];
+        _lang[] = data[1 .. 4];
+        _timeUnit = cast(TimeUnit)data[4];
+        _contentType = cast(ContentType)data[5];
+        data = data[6 .. $];
+        _content = decodeString(data, encodingByte);
+        while(data.length > 5) {
+            immutable text = decodeString(data, encodingByte);
+            if (data.length < 4) return;
+            immutable time =  decodeBigEndian!uint(data);
+            data = data[4 .. $];
+            _chunks ~= TextChunk(text, time);
+        }
+    }
+
+    @property ubyte[3] lang() const { return _lang; }
+    @property TimeUnit timeUnit() const { return _timeUnit; }
+    @property ContentType contentType() const { return _contentType; }
+    @property string content() const { return _content; }
+    @property inout(TextChunk)[] chunks() inout { return _chunks; }
+
+private:
+
+    ubyte[3] _lang;
+    TimeUnit _timeUnit;
+    ContentType _contentType;
+    string _content;
+    TextChunk[] _chunks;
 }
