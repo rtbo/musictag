@@ -75,6 +75,10 @@ class DefaultFrameFactory : FrameFactory
             return new PopularimeterFrame(header, data);
         else if (header.id == "AENC")
             return new AudioEncryptionFrame(header, data);
+        else if (header.id == "COMR")
+            return new CommercialFrame(header, data);
+        else if (header.id == "PRIV")
+            return new PrivateFrame(header, data);
         return null;
     }
 

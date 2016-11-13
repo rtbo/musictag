@@ -660,3 +660,90 @@ private:
     ushort _previewLength;
     ubyte[] _encryptionInfo;
 }
+
+
+class CommercialFrame : Frame
+{
+    import std.datetime : Date;
+
+    enum ReceivedAs
+    {
+        Other                               = 0x00,
+        StandardCDAlbumWithOtherSongs       = 0x01,
+        CompressedAudioOnCD                 = 0x02,
+        FileOverTheInternet                 = 0x03,
+        StreamOverTheInternet               = 0x04,
+        AsNoteSheets                        = 0x05,
+        AsNoteSheetsInABookWithOtherSheets  = 0x06,
+        MusicOnOtherMedia                   = 0x07,
+        NonMusicalMerchandise               = 0x08,
+    }
+
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        import std.conv : to;
+
+        assert(header.id == "COMR");
+        super(header);
+        enforce(data.length >= 15);
+        immutable ubyte encodingByte = data[0];
+        data = data[1 .. $];
+        _price = decodeLatin1(data);
+        enforce(data.length > 13);
+        const date = cast(const(char)[])data[0 .. 8];
+        _validUntil = Date(
+            date[0 .. 4].to!int, date[4 .. 6].to!int, date[6 .. 8].to!int
+        );
+        data = data[8 .. $];
+        _contact = decodeLatin1(data);
+        enforce(data.length >= 4);
+        _receivedAs = cast(ReceivedAs)data[0];
+        data = data[1 .. $];
+        _seller = decodeString(data, encodingByte);
+        _description = decodeString(data, encodingByte);
+        _pictureMimeType = decodeLatin1(data);
+        _pictureData = data.dup;
+    }
+
+    @property string price() const { return _price; }
+    @property Date validUntil() const { return _validUntil; }
+    @property string contact() const { return _contact; }
+    @property ReceivedAs receivedAs() const { return _receivedAs; }
+    @property string seller() const { return _seller; }
+    @property string description() const { return _description; }
+    @property string pictureMimeType() const { return _pictureMimeType; }
+    @property const(ubyte)[] pictureData() const { return _pictureData; }
+
+
+private:
+
+    string _price;
+    Date _validUntil;
+    string _contact;
+    ReceivedAs _receivedAs;
+    string _seller;
+    string _description;
+    string _pictureMimeType;
+    ubyte[] _pictureData;
+}
+
+
+class PrivateFrame : Frame
+{
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        assert(header.id == "PRIV");
+        super(header);
+        _owner = decodeLatin1(data);
+        _data = data.dup;
+    }
+
+    @property string owner() const { return _owner; }
+    @property const(ubyte)[] data() const {
+        return _data;
+    }
+
+private:
+    string _owner;
+    ubyte[] _data;
+}
