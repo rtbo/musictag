@@ -12,7 +12,7 @@ import std.stdio : File;
 
 /// Reads a tag from the supplied file and returns it.
 /// Returns null if not tag can be read in the file.
-/// The FrameFactoryDg parameter is optional. It allows applications to add 
+/// The FrameFactoryDg parameter is optional. It allows applications to add
 /// support for additional frames, not supported by musictag.
 Tag readMpegTag(string filename, FrameFactoryDg factoryBuilder=null)
 {
