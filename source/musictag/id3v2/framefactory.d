@@ -1,17 +1,17 @@
 module musictag.id3v2.framefactory;
 
+import musictag.id3v2;
 import musictag.id3v2.frame;
-import musictag.id3v2.header;
 import musictag.id3v2.builtinframes;
 
 
 /// Delegate that can return a FrameFactory based on the
 /// tag header. This allows applications to provide different
 /// factories based on the tag version
-alias FrameFactoryDg = FrameFactory delegate(Header header);
+alias FrameFactoryDg = FrameFactory delegate(Id3v2Header header);
 
 /// Builds music default frame factory
-FrameFactory defaultFrameFactory(Header header)
+FrameFactory defaultFrameFactory(Id3v2Header header)
 {
     return new DefaultFrameFactory(header.majVersion);
 }

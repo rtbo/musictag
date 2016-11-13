@@ -3,7 +3,6 @@ module musictag.mpeg;
 import musictag.taggedfile;
 import musictag.tag;
 import musictag.id3v2;
-import musictag.id3v2.header;
 import musictag.id3v2.framefactory;
 import musictag.utils;
 
@@ -23,7 +22,7 @@ Tag readMpegTag(string filename, FrameFactoryDg factoryBuilder=null)
     enforce(exists(filename) && !isDir(filename));
     auto f = File(filename, "rb");
 
-    auto offset = findInFile(f, Header.identifier[]);
+    auto offset = findInFile(f, Id3v2Header.identifier[]);
     if (offset != -1) return new Id3v2Tag(f, offset, factoryBuilder);
     else return null;
 }
