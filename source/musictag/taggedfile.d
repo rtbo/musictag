@@ -7,6 +7,7 @@ interface TaggedFile
     enum Format
     {
         Mpeg,
+        Ogg,
     }
 
     @property Format format() const;
