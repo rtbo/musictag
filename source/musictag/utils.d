@@ -2,22 +2,54 @@ module musictag.utils;
 
 import std.stdio : File;
 import std.traits : isIntegral;
+import std.typecons : Flag, Yes, No;
 
+
+
+/// Decodes the supplied bytes into a native integer
+/// assuming byte order given as parameter
+T decodeInteger(T)(const(ubyte)[] data, Flag!"msbFirst" byteOrder)
+if (isIntegral!T)
+in { assert(data.length <= T.sizeof); }
+body
+{
+    if (byteOrder == Yes.msbFirst)
+        return decodeIntegerTplt!(T, Yes.msbFirst)(data);
+    else return decodeIntegerTplt!(T, No.msbFirst)(data);
+}
 
 /// Decodes the supplied big-endian bytes into a native integer
 T decodeBigEndian(T)(const(ubyte)[] data) if (isIntegral!T)
 in { assert(data.length <= T.sizeof); }
 body
 {
-    // Do not attempt a pointer cast here for version(BigEndian)
-    // because we might e.g. have data.length == 2 for a uint.
-    T res = 0;
-    foreach (i, b; data)
+    return decodeIntegerTplt!(T, Yes.msbFirst)(data);
+}
+
+/// Decodes the supplied little-endian bytes into a native integer
+T decodeLittleEndian(T)(const(ubyte)[] data) if (isIntegral!T)
+in { assert(data.length <= T.sizeof); }
+body
+{
+    return decodeIntegerTplt!(T, No.msbFirst)(data);
+}
+
+private template decodeIntegerTplt(T, Flag!"msbFirst" byteOrder)
+{
+    T decodeIntegerTplt(const(ubyte)[] data)
+    in { assert(data.length <= T.sizeof); }
+    body
     {
-        immutable shift = 8 * (data.length - i - 1);
-        res |= b << shift;
+        // Do not attempt a pointer cast here for native order
+        // because we might have e.g. a sliced data.length == 2 for a uint.
+        T res = 0;
+        foreach (i, b; data)
+        {
+            immutable shift = 8 * (byteOrder == Yes.msbFirst ? (data.length - i - 1) : i);
+            res |= b << shift;
+        }
+        return res;
     }
-    return res;
 }
 
 /// returns next power of 2 above the specified number
