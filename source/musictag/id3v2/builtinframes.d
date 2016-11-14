@@ -2,7 +2,7 @@ module musictag.id3v2.builtinframes;
 
 import musictag.id3v2.frame;
 import musictag.id3v2.support;
-import musictag.utils : decodeBigEndian;
+import musictag.support : decodeBigEndian;
 
 import std.exception : enforce;
 

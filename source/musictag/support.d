@@ -1,4 +1,4 @@
-module musictag.utils;
+module musictag.support;
 
 import std.stdio : File;
 import std.traits : isIntegral;

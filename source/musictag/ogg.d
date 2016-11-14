@@ -2,7 +2,7 @@ module musictag.ogg;
 
 import musictag.taggedfile;
 import musictag.tag;
-import musictag.utils;
+import musictag.support;
 
 import std.exception : enforce;
 

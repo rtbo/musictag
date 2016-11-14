@@ -20,8 +20,8 @@ private:
 
 struct FrameHeader
 {
-    enum size_t size = 10;  
-      
+    enum size_t size = 10;
+
     @property string id() const { return _id; }
     @property size_t frameSize() const { return _frameSize; }
     @property bool tagAlterPreserve() const { return _tagAlterPreserve; }
@@ -41,7 +41,7 @@ struct FrameHeader
         res._id = cast(string)(data[0 .. 4].idup);
         if (ver == 3)
         {
-            import musictag.utils : decodeBigEndian;
+            import musictag.support : decodeBigEndian;
             res._frameSize = decodeBigEndian!uint(data[4 .. 8]);
 
             res._tagAlterPreserve = cast(bool)(data[8] & 0b1000_0000);
@@ -72,7 +72,7 @@ struct FrameHeader
 
 
 private:
-    
+
     string _id;
     uint _frameSize;
     bool _tagAlterPreserve;

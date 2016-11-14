@@ -4,7 +4,7 @@ import musictag.taggedfile;
 import musictag.tag;
 import musictag.id3v2;
 import musictag.id3v2.framefactory;
-import musictag.utils;
+import musictag.support;
 
 import std.stdio : File;
 

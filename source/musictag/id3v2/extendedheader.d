@@ -11,7 +11,7 @@ class ExtendedHeader
         assert(ver == 3 || ver == 4);
         if (ver == 3)
         {
-            import musictag.utils : decodeBigEndian;
+            import musictag.support : decodeBigEndian;
             // In id3v2.3, the size field excludes itself
             _size = decodeBigEndian!size_t(data[0 .. 4]) + 4;
         }
