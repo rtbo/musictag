@@ -3,7 +3,7 @@ module musictag.support;
 import std.stdio : File;
 import std.traits : isIntegral;
 import std.typecons : Flag, Yes, No;
-import std.range : isInputRange;
+import std.range : isInputRange, ElementType;
 
 
 
@@ -53,11 +53,15 @@ private template decodeIntegerTplt(T, Flag!"msbFirst" byteOrder)
     }
 }
 
-/// Checks weither T conforms to the ReadBytesRange static interface
-/// isReadBytesRange implies inInputRange and the presence of readBuf methods.
-template isReadBytesRange(T)
+///
+enum isBytesInputRange(T) = isInputRange!T && is(ElementType!T == ubyte);
+
+/// Checks weither T conforms to the BufBytesInputRange static interface
+/// BufBytesInputRange implies isBytesInputRange and the presence of readBuf methods
+/// that efficiently retrieves an array of bytes from the source
+template isBufBytesInputRange(T)
 {
-    enum bool isReadBytesRange = isInputRange!T && is(typeof(
+    enum bool isBufBytesInputRange = isBytesInputRange!T && is(typeof(
     (T t)
     {
         ubyte[] buf1 = t.readBuf(new ubyte[10]);
@@ -66,37 +70,17 @@ template isReadBytesRange(T)
 }
 
 
-/// Read len bytes from the supplied ReadBufRange type and return what
-/// could be read.
-const(ubyte)[] readBytes(R)(R range, size_t len) if (isReadBytesRange!R)
-{
-    return range.readBuf(len);
-}
-
-
-/// Read bytes from the supplied ReadBufRange to the supplied buffer
+/// Read bytes from the supplied BytesInputRange to the supplied buffer
 /// and return what could be read.
-ubyte[] readBytes(R)(R range, ubyte[] buf) if (isReadBytesRange!R)
+/// Takes advantage of BufBytesInputRange static interface if available.
+ubyte[] readBytes(R)(R range, ubyte[] buf) if (isBufBytesInputRange!R)
 {
     return range.readBuf(buf);
 }
 
-
-/// Read len bytes from the supplied ReadBufRange type and return what
-/// could be read.
-const(ubyte)[] readBytes(R)(R range, size_t len)
-if (isInputRange!R && !isReadBytesRange!R)
-{
-    // return type const or not const?
-    ubyte[] buf = new ubyte[len];
-    return readBytes(range, buf);
-}
-
-
-/// Read bytes from the supplied ReadBufRange to the supplied buffer
-/// and return what could be read.
+/// Ditto
 ubyte[] readBytes(R)(R range, ubyte[] buf)
-if (isInputRange!R && !isReadBytesRange!R)
+if (isByteInputRange!R && !isBufBytesInputRange!R)
 {
     size_t pos;
     while(pos < buf.length && !range.empty)
@@ -109,18 +93,44 @@ if (isInputRange!R && !isReadBytesRange!R)
 }
 
 
-/// Buffer file input range.
-/// also implement hasReadBuf static interface
+/// Read len bytes from the supplied ReadBufRange type and return what
+/// could be read. Possibly returns a slice of the range internal buffer
+/// if range internal buffer conforms to BufBytesInputRange and if enough
+/// available bytes in the buffer. Otherwise, allocates and return a new
+/// buffer. Returned buffer may be invalidated after next data fetch
+/// from the range, and data should be duplicated if needed to be kept.
+const(ubyte)[] readBytes(R)(R range, size_t len) if (isBufBytesInputRange!R)
+{
+    return range.readBuf(len);
+}
+
+/// Ditto
+const(ubyte)[] readBytes(R)(R range, size_t len)
+if (isInputRange!R && !isReadBytesRange!R)
+{
+    // return type const or not const?
+    ubyte[] buf = new ubyte[len];
+    return readBytes(range, buf);
+}
+
+
+static assert(isBytesInputRange!BufferedFileRange);
+static assert(isBufBytesInputRange!BufferedFileRange);
+
+
+/// Buffered file input range.
+/// Implements BufBytesInputRange static interface.
+/// Also provide size, seek and tell methods that shortcut
+/// to the encapsulated File.
 struct BufferedFileRange
 {
-    import std.stdio : SEEK_END;
+    import std.stdio : SEEK_SET;
 
-    /// Build a BufferedFileRange. Supplied file is requested to be open
+    /// Build a BufferedFileRange. Supplied file MUST be open beforehand.
     this(File file)
-    in {
-        assert(file.isOpen);
-    }
-    body {
+    in { assert(file.isOpen); }
+    body 
+    {
         _file = file;
         _buffer = new ubyte[bufSize];
         next();
@@ -168,10 +178,7 @@ struct BufferedFileRange
             import std.algorithm : min;
 
             // checking how much remains in the file
-            immutable pos = _file.tell();
-            _file.seek(0, SEEK_END);
-            len = min(len, _file.tell() - pos);
-            _file.seek(pos);
+            len = min(len, _file.size - _file.tell);
 
             // allocate and fill return buf
             return this.readBuf(new ubyte[len]);
@@ -196,6 +203,27 @@ struct BufferedFileRange
         }
         while(done < buf.length && _slice.length != 0);
         return buf[0 .. done];
+    }
+
+    /// See std.stdio.File.size
+    @property ulong size()
+    {
+        return _file.size;
+    }
+
+    /// See std.stdio.File.tell
+    @property ulong tell() const
+    {
+        return _file.tell();
+    }
+
+    /// See std.stdio.File.seek
+    /// Invalidate the internal buffer
+    void seek(long pos, int origin=SEEK_SET)
+    {
+        _file.seek(pos, origin);
+        _slice = [];
+        next();
     }
 
 private:
