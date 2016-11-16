@@ -3,6 +3,7 @@ module musictag.support;
 import std.stdio : File;
 import std.traits : isIntegral;
 import std.typecons : Flag, Yes, No;
+import std.range : isInputRange;
 
 
 
@@ -51,6 +52,167 @@ private template decodeIntegerTplt(T, Flag!"msbFirst" byteOrder)
         return res;
     }
 }
+
+/// Checks weither T conforms to the ReadBytesRange static interface
+/// isReadBytesRange implies inInputRange and the presence of readBuf methods.
+template isReadBytesRange(T)
+{
+    enum bool isReadBytesRange = isInputRange!T && is(typeof(
+    (T t)
+    {
+        ubyte[] buf1 = t.readBuf(new ubyte[10]);
+        const(ubyte)[] buf2 = t.readBuf(10);
+    }));
+}
+
+
+/// Read len bytes from the supplied ReadBufRange type and return what
+/// could be read.
+const(ubyte)[] readBytes(R)(R range, size_t len) if (isReadBytesRange!R)
+{
+    return range.readBuf(len);
+}
+
+
+/// Read bytes from the supplied ReadBufRange to the supplied buffer
+/// and return what could be read.
+ubyte[] readBytes(R)(R range, ubyte[] buf) if (isReadBytesRange!R)
+{
+    return range.readBuf(buf);
+}
+
+
+/// Read len bytes from the supplied ReadBufRange type and return what
+/// could be read.
+const(ubyte)[] readBytes(R)(R range, size_t len)
+if (isInputRange!R && !isReadBytesRange!R)
+{
+    // return type const or not const?
+    ubyte[] buf = new ubyte[len];
+    return readBytes(range, buf);
+}
+
+
+/// Read bytes from the supplied ReadBufRange to the supplied buffer
+/// and return what could be read.
+ubyte[] readBytes(R)(R range, ubyte[] buf)
+if (isInputRange!R && !isReadBytesRange!R)
+{
+    size_t pos;
+    while(pos < buf.length && !range.empty)
+    {
+        buf[pos] = range.front;
+        pos++;
+        range.popFront();
+    }
+    return buf[0 .. pos];
+}
+
+
+/// Buffer file input range.
+/// also implement hasReadBuf static interface
+struct BufferedFileRange
+{
+    import std.stdio : SEEK_END;
+
+    /// Build a BufferedFileRange. Supplied file is requested to be open
+    this(File file)
+    in {
+        assert(file.isOpen);
+    }
+    body {
+        _file = file;
+        _buffer = new ubyte[bufSize];
+        next();
+    }
+
+    /// Implementation of InputRange
+    @property bool empty()
+    {
+        return _slice.length == 0;
+    }
+
+    /// Ditto
+    @property ubyte front()
+    {
+        return _slice[0];
+    }
+
+    /// Ditto
+    void popFront()
+    {
+        _slice = _slice[1 .. $];
+        if (!_slice.length) next();
+    }
+
+    /// Reads a len bytes from the file and returns what could
+    /// actually be read.
+    /// Attempt is made to return a slice to the internal buffer
+    /// but allocates a new one if requested quantity is larger to
+    /// what left to be read in internal the buffer.
+    /// If slice to the internal buffer is returned, note that it
+    /// will not be longer valid after call to popFront, readBuf or tell.
+    /// If read data must be kept, the overload taking a user supplied buffer
+    /// is a better option, because it avoids data duplication.
+    const(ubyte)[] readBuf(size_t len)
+    {
+        if (len <= _slice.length)
+        {
+            auto res = _slice[0 .. len];
+            _slice = _slice[len .. $];
+            if (!_slice.length) next();
+            return res;
+        }
+        else
+        {
+            import std.algorithm : min;
+
+            // checking how much remains in the file
+            immutable pos = _file.tell();
+            _file.seek(0, SEEK_END);
+            len = min(len, _file.tell() - pos);
+            _file.seek(pos);
+
+            // allocate and fill return buf
+            return this.readBuf(new ubyte[len]);
+        }
+    }
+
+
+    /// Read data from file and places it in the user supplied buffer.
+    /// Returns a slice of the supplied buffer corresponding to what
+    /// could actually be read.
+    ubyte[] readBuf(ubyte[] buf)
+    {
+        import std.algorithm : min;
+
+        size_t done;
+        do {
+            immutable todo = min(_slice.length, buf.length-done);
+            buf[done .. done+todo] = _slice[0 .. todo];
+            _slice = _slice[todo .. $];
+            done += todo;
+            if (!_slice.length) next();
+        }
+        while(done < buf.length && _slice.length != 0);
+        return buf[0 .. done];
+    }
+
+private:
+
+    void next()
+    {
+        assert(!_slice.length);
+        _slice = _file.rawRead(_buffer);
+    }
+
+    enum bufSize = 4096;
+
+    File _file;
+    ubyte[] _slice;
+    ubyte[] _buffer;
+}
+
 
 /// returns next power of 2 above the specified number
 T nextPow2(T)(T x) if (isIntegral!T)
