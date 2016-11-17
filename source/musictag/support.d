@@ -53,8 +53,18 @@ private template decodeIntegerTplt(T, Flag!"msbFirst" byteOrder)
     }
 }
 
-///
-enum isBytesInputRange(T) = isInputRange!T && is(ElementType!T == ubyte);
+/// Checks weither the supplied type conforms to ByteInputRange static interface,
+/// that is InputRange of ubytes, and a findPattern method that seeks the data
+/// source to the next occurence of pattern or to the source exhaust
+template isBytesInputRange(T)
+{
+    enum isBytesInputRange = isInputRange!T && is(ElementType!T == ubyte) &&
+    is(typeof((T t, const(ubyte)[] pattern) 
+    {
+        ulong p = t.findPattern(pattern);
+    }));
+}
+
 
 /// Checks weither T conforms to the BufBytesInputRange static interface
 /// BufBytesInputRange implies isBytesInputRange and the presence of readBuf methods
@@ -214,7 +224,7 @@ struct BufferedFileRange
     /// See std.stdio.File.tell
     @property ulong tell() const
     {
-        return _file.tell();
+        return _file.tell() - cast(ulong)_slice.length;
     }
 
     /// See std.stdio.File.seek
@@ -225,6 +235,90 @@ struct BufferedFileRange
         _slice = [];
         next();
     }
+
+    /// Seeks the file to the beginning of next occurence of pattern or to end of file.
+    /// Returns the number of bytes advanced (0 indicates pattern was found at
+    /// the current position).
+    ulong findPattern(const(ubyte)[] pattern)
+    {
+        import std.algorithm : min;
+
+        ulong adv = 0;
+        size_t found = 0;
+        bool fractionned;
+        immutable origPos = tell();
+        _pattern = [];
+
+    mainFileLoop:
+        while (!empty && found < pattern.length)
+        {
+            size_t done = 0;
+            if (fractionned)
+            {
+                size_t until = min(_slice.length, pattern.length-found);
+                if (_slice[0 .. until] == pattern[found .. found+until])
+                {
+                    found += until;
+                    if (found < pattern.length) // exhausted a 2nd slice!
+                    {
+                        _slice = [];
+                        next();
+                    }
+                }
+                else
+                {
+                    // false alarm, we restart over with the current slice from its begin
+                    done += found; // missing from previous loop
+                    found = 0;
+                    fractionned = false;
+                    continue;
+                }
+            }
+            else
+            {
+            chunkLoop:
+                foreach (i; 0 .. _slice.length)
+                {
+                    size_t until = min(pattern.length, _slice.length-i);
+                    if (_slice[i .. i+until] == pattern[0 .. until])
+                    {
+                        found = until;
+                        fractionned = until < pattern.length;
+                        done = i;
+                        break chunkLoop;
+                    }
+                }
+                if (!found)
+                {
+                    done = _slice.length;
+                    _slice = [];
+                    next();
+                }
+                else if (fractionned)
+                {
+                    _slice = [];
+                    next();
+                }
+                else
+                {
+                    assert(found == pattern.length);
+                    _slice = _slice[done .. $];
+                }
+            }
+            adv += done;
+        }
+        if (fractionned) 
+        {
+            // If pattern has been found fractionned over 2 (or more) slices,
+            // then buffer cannot point on the pattern begin because was unvalidated.
+            // We place back the file pointer at the begin of the pattern.
+            _file.seek(origPos+adv, SEEK_SET);
+            _slice = [];
+            next();
+        }
+        return adv;
+    }
+
 
 private:
 
@@ -237,9 +331,63 @@ private:
     enum bufSize = 4096;
 
     File _file;
+    ubyte[] _pattern;
     ubyte[] _slice;
     ubyte[] _buffer;
 }
+
+
+
+version (unittest)
+{
+    void testFindPatternInBufferedFileRange(size_t pos, size_t filesize)
+    {
+        import std.format : format;
+        import std.algorithm : max;
+        import std.file : tempDir, write, remove;
+        import std.path : chainPath;
+        import std.conv : to;
+        
+        string deleteMe = chainPath(tempDir(), "musictag.support.BufferedFileRange.test").to!string;
+
+        auto pattern = cast(immutable (ubyte)[])"PatternToBeFound";
+        filesize = max(filesize, pos+pattern.length);
+
+        {
+            auto content = new ubyte[filesize];
+            content[] = 'X';
+            content[pos .. pos+pattern.length] = pattern;
+            write(deleteMe, content);
+        }
+
+        scope(exit) remove(deleteMe);
+
+        auto bfr = BufferedFileRange(File(deleteMe, "rb"));
+        immutable adv = bfr.findPattern(pattern);
+        assert(
+            adv == pos,
+            format("testFindPatternInBufferedFileRange(%s, %s) returned value", pos, filesize)
+        );
+        assert(!bfr.empty);
+        auto start = bfr.readBuf(new ubyte[pattern.length]);
+        assert(
+            start == pattern,
+            format("testFindPatternInBufferedFileRange(%s, %s) state", pos, filesize)
+        );
+    }
+
+    unittest
+    {
+        // buffer size is 4096 
+        testFindPatternInBufferedFileRange(1000, 1234);  // in first chunk
+        testFindPatternInBufferedFileRange(5000, 6000);  // in second chunk
+        testFindPatternInBufferedFileRange(4090, 6000);  // testing partial
+        testFindPatternInBufferedFileRange(0, 1000);     // testing file starts with pattern
+        testFindPatternInBufferedFileRange(1000, 1000);  // testing file ends with pattern
+        testFindPatternInBufferedFileRange(0, 0);        // testing file only contains pattern
+    }
+}
+
 
 
 /// returns next power of 2 above the specified number
@@ -299,26 +447,15 @@ mainFileLoop:
 
 version (unittest)
 {
-    string deleteMe;
-
-    static this() {
-        import std.file : tempDir;
-        import std.path : chainPath;
-        import std.conv : to;
-        deleteMe = chainPath(tempDir(), "musictag.utils.test").to!string;
-    }
-
-    static ~this()
-    {
-        import std.file : remove, exists;
-        if (exists(deleteMe)) remove(deleteMe);
-    }
-
     void testFindPatternInFile(size_t pos, size_t filesize)
     {
         import std.format : format;
         import std.algorithm : max;
-        import std.file : write, remove;
+        import std.file : tempDir, write, remove;
+        import std.path : chainPath;
+        import std.conv : to;
+        
+        string deleteMe = chainPath(tempDir(), "musictag.support.findInFile.test").to!string;
 
         auto pattern = cast(immutable (ubyte)[])"PatternToBeFound";
         filesize = max(filesize, pos+pattern.length);
