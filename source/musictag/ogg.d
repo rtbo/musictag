@@ -14,54 +14,58 @@ enum isOggPageInputRange(R) = isInputRange!R && is(ElementType!R == OggPage);
 immutable(ubyte)[] capturePattern = ['O', 'g', 'g', 'S'];
 
 
-/// Input range of Ogg page
+/// Builds input range of Ogg page
 /// The front property always return page with the same data buffer
 /// (filled with new data after each popFront call), therefore
 /// the dup property of the page data should be used if a reference
 /// to it is to be kept
-struct OggPageRange(R) if (isBytesInputRange!R)
+auto oggPageRange(R)(R range) if (isBytesInputRange!R)
 {
-    this (R range)
+    struct Result(R) if (isBytesInputRange!R)
     {
-        _range = range;
-        _page = new OggPage;
-        next();
-    }
-
-    @property bool empty()
-    {
-        return _range.empty;
-    }
-
-    @property auto front()
-    {
-        return OggPage(_header, _data);
-    }
-
-    void popFront()
-    {
-        next();
-    }
-
-private:
-
-    void next()
-    {
-        _range.findPattern(capturePattern);
-        if (!_range.empty)
+        this (R range)
         {
-            auto headerBytes = readBytes(_range, new ubyte[OggPageHeader.commonSize]);
-            _header = OggPageHeader(headerBytes, _range);
-            _data.length = _header.pageSize;
-            _data = readBytes(_range, _data);
+            _range = range;
+            next();
         }
+
+        @property bool empty()
+        {
+            return _range.empty;
+        }
+
+        @property auto front()
+        {
+            return OggPage(_header, _data);
+        }
+
+        void popFront()
+        {
+            next();
+        }
+
+    private:
+
+        void next()
+        {
+            _range.findPattern(capturePattern);
+            if (!_range.empty)
+            {
+                auto headerBytes = readBytes(_range, new ubyte[OggPageHeader.commonSize]);
+                _header = OggPageHeader(headerBytes, _range);
+                _data.length = _header.pageSize;
+                _data = readBytes(_range, _data);
+            }
+        }
+
+        R _range;
+        OggPageHeader _header;
+        ubyte[] _data;
     }
 
-    R _range;
-    OggPageHeader _header;
-    ubyte[] _data;
-}
+    return Result!R(range);
 
+}
 
 struct OggPage
 {
@@ -84,7 +88,6 @@ private:
 
 struct OggPageHeader
 {
-
     @property ubyte streamVersion() const { return _streamVersion; }
     @property bool continuedPacket() const { return (_flags & 0x01) == 0x01; }
     @property bool firstPage() const { return (_flags & 0x02) == 0x02; }
@@ -108,8 +111,8 @@ struct OggPageHeader
 private:
 
     enum commonSize = 27;
-    
-    this (R)(const(ubyte)[] data, R r)
+
+    this (R)(const(ubyte)[] data, ref R r)
     {
         assert(data.length == commonSize && data[0 .. 4] == capturePattern);
         _streamVersion = data[4];
