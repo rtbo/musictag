@@ -5,50 +5,82 @@ import musictag.tag;
 import musictag.support;
 
 import std.exception : enforce, assumeUnique;
-import std.stdio : File;
+import std.range : isInputRange, ElementType;
+
+
+enum isOggPageInputRange(R) = isInputRange!R && is(ElementType!R == OggPage);
 
 
 immutable(ubyte)[] capturePattern = ['O', 'g', 'g', 'S'];
 
-struct OggPageRange
-{
 
-}
-
-class OggPage
+/// Input range of Ogg page
+/// The front property always return page with the same data buffer
+/// (filled with new data after each popFront call), therefore
+/// the dup property of the page data should be used if a reference
+/// to it is to be kept
+struct OggPageRange(R) if (isBytesInputRange!R)
 {
-    this(OggPageHeader header, File f)
+    this (R range)
     {
-        _header = header;
-        _pageData = assumeUnique(f.rawRead(new ubyte[_header.pageSize]));
+        _range = range;
+        _page = new OggPage;
+        next();
     }
 
-    @property const(OggPageHeader) header() const { return _header; }
-    @property immutable(ubyte)[] pageData() const { return _pageData; }
+    @property bool empty()
+    {
+        return _range.empty;
+    }
+
+    @property auto front()
+    {
+        return OggPage(_header, _data);
+    }
+
+    void popFront()
+    {
+        next();
+    }
 
 private:
 
+    void next()
+    {
+        _range.findPattern(capturePattern);
+        if (!_range.empty)
+        {
+            
+        }
+    }
+
+    R _range;
     OggPageHeader _header;
-    immutable(ubyte)[] _pageData;
+    ubyte[] _data;
 }
 
 
-class OggPageHeader
+struct OggPage
 {
-    this (const(ubyte)[] data, File f)
-    {
-        assert(data.length == 27 && data[0 .. 4] == capturePattern);
-        _streamVersion = data[4];
-        _flags = data[5];
-        _position = decodeLittleEndian!ulong(data[6 .. 14]);
-        _streamSerialNumber = decodeLittleEndian!uint(data[14 .. 18]);
-        _pageSequence = decodeLittleEndian!uint(data[18 .. 22]);
-        _pageChecksum = decodeLittleEndian!uint(data[22 .. 26]);
-        _numSegments =  data[26];
 
-        _segmentSizes = assumeUnique(f.rawRead(new ubyte[_numSegments]));
-        enforce(_segmentSizes.length == _numSegments);
+    @property const(OggPageHeader) header() const { return _header; }
+    @property const(ubyte)[] data() const { return _data; }
+
+private:
+
+    this(OggPageHeader header, const(ubyte)[] data)
+    {
+        _header = header;
+        _data = data;
     }
+
+    OggPageHeader _header;
+    const(ubyte)[] _data;
+}
+
+
+struct OggPageHeader
+{
 
     @property ubyte streamVersion() const { return _streamVersion; }
     @property bool continuedPacket() const { return (_flags & 0x01) == 0x01; }
@@ -59,10 +91,10 @@ class OggPageHeader
     @property uint pageSequence() const { return _pageSequence; }
     @property uint pageChecksum() const { return _pageChecksum; }
     @property size_t numSegments() const { return _numSegments; }
-    @property immutable(ubyte)[] segmentSizes() const { return _segmentSizes; }
+    @property const(ubyte)[] segmentSizes() const { return _segmentSizes; }
 
     @property size_t headerSize() const {
-        return 27 + _numSegments;
+        return commonSize + _numSegments;
     }
 
     @property size_t pageSize() const {
@@ -72,12 +104,29 @@ class OggPageHeader
 
 private:
 
-    ubyte               _streamVersion;
-    ubyte               _flags;
-    ulong               _position;
-    uint                _streamSerialNumber;
-    uint                _pageSequence;
-    uint                _pageChecksum;
-    ubyte               _numSegments;
-    immutable(ubyte)[]  _segmentSizes;
+    enum commonSize = 27;
+    
+    this (R)(const(ubyte)[] data, R r)
+    {
+        assert(data.length == commonSize && data[0 .. 4] == capturePattern);
+        _streamVersion = data[4];
+        _flags = data[5];
+        _position = decodeLittleEndian!ulong(data[6 .. 14]);
+        _streamSerialNumber = decodeLittleEndian!uint(data[14 .. 18]);
+        _pageSequence = decodeLittleEndian!uint(data[18 .. 22]);
+        _pageChecksum = decodeLittleEndian!uint(data[22 .. 26]);
+        _numSegments =  data[26];
+
+        _segmentSizes = readBytes(r, new ubyte[_numSegments]);
+        enforce(_segmentSizes.length == _numSegments);
+    }
+
+    ubyte   _streamVersion;
+    ubyte   _flags;
+    ulong   _position;
+    uint    _streamSerialNumber;
+    uint    _pageSequence;
+    uint    _pageChecksum;
+    ubyte   _numSegments;
+    ubyte[] _segmentSizes;
 }
