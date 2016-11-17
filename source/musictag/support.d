@@ -59,7 +59,7 @@ private template decodeIntegerTplt(T, Flag!"msbFirst" byteOrder)
 template isBytesInputRange(T)
 {
     enum isBytesInputRange = isInputRange!T && is(ElementType!T == ubyte) &&
-    is(typeof((T t, const(ubyte)[] pattern) 
+    is(typeof((T t, const(ubyte)[] pattern)
     {
         ulong p = t.findPattern(pattern);
     }));
@@ -83,14 +83,14 @@ template isBufBytesInputRange(T)
 /// Read bytes from the supplied BytesInputRange to the supplied buffer
 /// and return what could be read.
 /// Takes advantage of BufBytesInputRange static interface if available.
-ubyte[] readBytes(R)(R range, ubyte[] buf) if (isBufBytesInputRange!R)
+ubyte[] readBytes(R)(ref R range, ubyte[] buf) if (isBufBytesInputRange!R)
 {
     return range.readBuf(buf);
 }
 
 /// Ditto
-ubyte[] readBytes(R)(R range, ubyte[] buf)
-if (isByteInputRange!R && !isBufBytesInputRange!R)
+ubyte[] readBytes(R)(ref R range, ubyte[] buf)
+if (isBytesInputRange!R && !isBufBytesInputRange!R)
 {
     size_t pos;
     while(pos < buf.length && !range.empty)
@@ -109,13 +109,13 @@ if (isByteInputRange!R && !isBufBytesInputRange!R)
 /// available bytes in the buffer. Otherwise, allocates and return a new
 /// buffer. Returned buffer may be invalidated after next data fetch
 /// from the range, and data should be duplicated if needed to be kept.
-const(ubyte)[] readBytes(R)(R range, size_t len) if (isBufBytesInputRange!R)
+const(ubyte)[] readBytes(R)(ref R range, size_t len) if (isBufBytesInputRange!R)
 {
     return range.readBuf(len);
 }
 
 /// Ditto
-const(ubyte)[] readBytes(R)(R range, size_t len)
+const(ubyte)[] readBytes(R)(ref R range, size_t len)
 if (isInputRange!R && !isReadBytesRange!R)
 {
     // return type const or not const?
@@ -139,7 +139,7 @@ struct BufferedFileRange
     /// Build a BufferedFileRange. Supplied file MUST be open beforehand.
     this(File file)
     in { assert(file.isOpen); }
-    body 
+    body
     {
         _file = file;
         _buffer = new ubyte[bufSize];
@@ -203,16 +203,23 @@ struct BufferedFileRange
     {
         import std.algorithm : min;
 
-        size_t done;
+        size_t done = 0;
         do {
-            immutable todo = min(_slice.length, buf.length-done);
-            buf[done .. done+todo] = _slice[0 .. todo];
-            _slice = _slice[todo .. $];
-            done += todo;
+            immutable until = min(_slice.length, buf.length-done);
+            buf[done .. done+until] = _slice[0 .. until];
+            _slice = _slice[until .. $];
+            done += until;
             if (!_slice.length) next();
         }
         while(done < buf.length && _slice.length != 0);
         return buf[0 .. done];
+    }
+
+    /// The file name.
+    /// See std.stdio.File.size
+    @property string name() const
+    {
+        return _file.name;
     }
 
     /// See std.stdio.File.size
@@ -307,7 +314,7 @@ struct BufferedFileRange
             }
             adv += done;
         }
-        if (fractionned) 
+        if (fractionned)
         {
             // If pattern has been found fractionned over 2 (or more) slices,
             // then buffer cannot point on the pattern begin because was unvalidated.
@@ -347,7 +354,7 @@ version (unittest)
         import std.file : tempDir, write, remove;
         import std.path : chainPath;
         import std.conv : to;
-        
+
         string deleteMe = chainPath(tempDir(), "musictag.support.BufferedFileRange.test").to!string;
 
         auto pattern = cast(immutable (ubyte)[])"PatternToBeFound";
@@ -378,7 +385,7 @@ version (unittest)
 
     unittest
     {
-        // buffer size is 4096 
+        // buffer size is 4096
         testFindPatternInBufferedFileRange(1000, 1234);  // in first chunk
         testFindPatternInBufferedFileRange(5000, 6000);  // in second chunk
         testFindPatternInBufferedFileRange(4090, 6000);  // testing partial
@@ -454,7 +461,7 @@ version (unittest)
         import std.file : tempDir, write, remove;
         import std.path : chainPath;
         import std.conv : to;
-        
+
         string deleteMe = chainPath(tempDir(), "musictag.support.findInFile.test").to!string;
 
         auto pattern = cast(immutable (ubyte)[])"PatternToBeFound";
