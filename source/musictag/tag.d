@@ -11,6 +11,8 @@ interface Tag {
     }
 
     /// Name of the file this tag was issued from.
+    /// Might return empty string if e.g. the tag is issued
+    /// from a network stream
     @property string filename() const;
 
     /// Native format of the tag
