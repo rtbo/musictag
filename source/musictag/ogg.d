@@ -50,7 +50,10 @@ private:
         _range.findPattern(capturePattern);
         if (!_range.empty)
         {
-            
+            auto headerBytes = readBytes(_range, new ubyte[OggPageHeader.commonSize]);
+            _header = OggPageHeader(headerBytes, _range);
+            _data.length = _header.pageSize;
+            _data = readBytes(_range, _data);
         }
     }
 
