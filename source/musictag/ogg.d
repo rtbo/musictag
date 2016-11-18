@@ -51,8 +51,7 @@ auto oggPageRange(R)(R range) if (isBytesInputRange!R)
             _range.findPattern(capturePattern);
             if (!_range.empty)
             {
-                auto headerBytes = readBytes(_range, new ubyte[OggPageHeader.commonSize]);
-                _header = OggPageHeader(headerBytes, _range);
+                _header = OggPageHeader.parse(_range);
                 _data.length = _header.pageSize;
                 _data = readBytes(_range, _data);
             }
@@ -112,19 +111,25 @@ private:
 
     enum commonSize = 27;
 
-    this (R)(const(ubyte)[] data, ref R r)
+    static OggPageHeader parse(R)(ref R r)
     {
-        assert(data.length == commonSize && data[0 .. 4] == capturePattern);
-        _streamVersion = data[4];
-        _flags = data[5];
-        _position = decodeLittleEndian!ulong(data[6 .. 14]);
-        _streamSerialNumber = decodeLittleEndian!uint(data[14 .. 18]);
-        _pageSequence = decodeLittleEndian!uint(data[18 .. 22]);
-        _pageChecksum = decodeLittleEndian!uint(data[22 .. 26]);
-        _numSegments =  data[26];
+        ubyte[commonSize] buf;
+        auto bytes = readBytes(r, buf[]);
+        assert(bytes.length == commonSize && bytes[0 .. 4] == capturePattern);
 
-        _segmentSizes = readBytes(r, new ubyte[_numSegments]);
-        enforce(_segmentSizes.length == _numSegments);
+        OggPageHeader oph;
+        oph._streamVersion = bytes[4];
+        oph._flags = bytes[5];
+        oph._position = decodeLittleEndian!ulong(bytes[6 .. 14]);
+        oph._streamSerialNumber = decodeLittleEndian!uint(bytes[14 .. 18]);
+        oph._pageSequence = decodeLittleEndian!uint(bytes[18 .. 22]);
+        oph._pageChecksum = decodeLittleEndian!uint(bytes[22 .. 26]);
+        oph._numSegments =  bytes[26];
+
+        oph._segmentSizes = readBytes(r, new ubyte[oph._numSegments]);
+        enforce(oph._segmentSizes.length == oph._numSegments);
+
+        return oph;
     }
 
     ubyte   _streamVersion;
