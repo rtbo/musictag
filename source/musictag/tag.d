@@ -8,6 +8,7 @@ interface Tag {
 
     enum Format {
         Id3v2,
+        Vorbis,
     }
 
     /// Name of the file this tag was issued from.
@@ -25,9 +26,11 @@ interface Tag {
     @property string title() const;
 
     /// Track number
+    /// Returns -1 if the track frame does not exist
     @property int track() const;
 
     /// Part of set (e.g. CD 1/2)
+    /// Returns -1 if the frame does not exist
     @property int pos() const;
 
     /// Composer
