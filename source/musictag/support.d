@@ -54,13 +54,14 @@ private template decodeIntegerTplt(T, Flag!"msbFirst" byteOrder)
 }
 
 /// Checks weither the supplied type conforms to ByteInputRange static interface,
-/// that is InputRange of ubytes, and a findPattern method that seeks the data
-/// source to the next occurence of pattern or to the source exhaust
+/// that is InputRange of ubytes, a name property and a findPattern method that
+/// seeks the data source to the next occurence of pattern or to the source exhaust
 template isBytesInputRange(T)
 {
     enum isBytesInputRange = isInputRange!T && is(ElementType!T == ubyte) &&
     is(typeof((T t, const(ubyte)[] pattern)
     {
+        string n = t.name;
         ulong p = t.findPattern(pattern);
     }));
 }
