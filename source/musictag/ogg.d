@@ -1,6 +1,5 @@
 module musictag.ogg;
 
-import musictag.taggedfile;
 import musictag.tag;
 import musictag.support;
 

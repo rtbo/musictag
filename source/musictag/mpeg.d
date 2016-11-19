@@ -1,6 +1,5 @@
 module musictag.mpeg;
 
-import musictag.taggedfile;
 import musictag.tag;
 import musictag.id3v2;
 import musictag.id3v2.framefactory;
