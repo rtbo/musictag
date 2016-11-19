@@ -2,6 +2,9 @@ module musictag.bitstream;
 
 import std.stdio : File;
 import std.range : isInputRange, ElementType;
+import std.traits : isIntegral;
+import std.exception : enforce;
+import std.range.primitives;
 
 /// Checks weither the supplied type conforms to ByteInputRange static interface,
 /// that is InputRange of ubytes, a name property and a findPattern method that
@@ -344,4 +347,149 @@ version (unittest)
         testFindPatternInBufferedFileRange(1000, 1000);  // testing file ends with pattern
         testFindPatternInBufferedFileRange(0, 0);        // testing file only contains pattern
     }
+}
+
+
+auto bitRange(R)(ref R source)
+if (isInputRange!R && is(ElementType!R == ubyte))
+{
+    return BitRange!R(source);
+}
+
+
+private struct BitRange(R)
+if (isInputRange!R && is(ElementType!R == ubyte))
+{
+    this(ref R source)
+    {
+        _source = &source;
+    }
+
+    ~this()
+    {
+        assert(_consumedBits == 0, "BitRange dropped in an uneven state");
+    }
+
+    invariant
+    {
+        assert(_consumedBits <= 8);
+    }
+
+    T readBits(T)(uint bits) if (isIntegral!T)
+    in {
+        assert(bits <= 8*T.sizeof);
+    }
+    body {
+
+        import std.algorithm : min;
+
+        // 2 consumed, 3 bits
+        //
+        // 1.
+        // source   abcdefgh
+        //            ^  |
+        //  rshift   srcMask     resMask
+        //       3  00111000    00000111
+        // num  00000cde
+        // res  00000cde
+
+        // 3 consumed, 6 bits
+        //
+        // 1.
+        // source   abcdefgh abcdefgh
+        //             ^      |
+        //  lshift   srcMask     resMask
+        //       1  00011111    00111110
+        // num  00defgh0
+        // res  00defgh0
+        // popFront
+        //
+        // 2.
+        // source   abcdefgh
+        //          ^|
+        //  rshift   srcMask     resMask
+        //       1  10000000    00000001
+        // num  0000000a
+        // res  00defgha
+
+        // 3 consumed, 9 bits
+        //
+        // 1.
+        // source   abcdefgh abcdefgh
+        //             ^         |
+        //  lshift   srcMask     resMask
+        //       4  00011111    00000001 11110000
+        // num  0000000d efgh0000
+        // res  0000000d efgh0000
+        // popFront
+        //
+        // 2.
+        // source   abcdefgh
+        //          ^   |
+        //  rshift   srcMask     resMask
+        //       1  11110000    00001111
+        // num  00000000 0000abcd
+        // res  0000000d efghabcd
+
+        T res = 0;
+        do
+        {
+            enforce(!(*_source).empty);
+
+            if (bits < 8-_consumedBits)
+            {
+                // right shifting
+                immutable resMask = 0xff >>> (8-bits);
+                immutable shift = (8 - (bits+_consumedBits));
+                assert((resMask << shift) <= 255);
+                immutable srcMask = cast(ubyte)(resMask << shift);
+
+                res |= ((*_source).front & srcMask) >>> shift;
+
+                _consumedBits += bits;
+                bits = 0;
+            }
+            else
+            {
+                // left shifting
+                immutable shift = (bits+_consumedBits - 8); // possibly 0
+                immutable srcMask = cast(ubyte)(0xff >>> _consumedBits);
+
+                res |= ((*_source).front & srcMask) << shift;
+
+                bits -= (8-_consumedBits);
+                _consumedBits = 8;
+            }
+
+            if (_consumedBits == 8)
+            {
+                _consumedBits = 0;
+                (*_source).popFront();
+            }
+
+        }
+        while(bits != 0);
+
+        return res;
+    }
+
+private:
+
+    R *_source;
+    ubyte _consumedBits;
+}
+
+unittest
+{
+    auto data = [   ubyte(0b0101_0101),
+                    ubyte(0b1010_1010),
+                    ubyte(0b0011_0011),
+                    ubyte(0b1100_1100)  ];
+    auto br = bitRange(data);
+    assert(br.readBits!uint(3) == 0b010);
+    assert(br.readBits!ubyte(6) == 0b1_0101_1);
+    assert(br.readBits!ushort(7) == 0b010_1010);
+    assert(data.length == 2);
+    assert(br.readBits!ushort(16) == 0b0011_0011_1100_1100);
+    assert(data.length == 0);
 }
