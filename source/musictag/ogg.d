@@ -144,3 +144,82 @@ private:
     ubyte   _numSegments;
     ubyte[] _segmentSizes;
 }
+
+
+
+auto oggPacketRange(R)(R source) if (isOggPageInputRange!R)
+{
+    struct Result
+    {
+        this(R source)
+        {
+            _source = source;
+            next();
+        }
+
+        @property bool empty()
+        {
+            return !_packet.length && _source.empty;
+        }
+
+        @property ubyte[] front()
+        {
+            return _packet;
+        }
+
+        void popFront()
+        {
+            next();
+        }
+
+    private:
+        void next()
+        {
+            _packet = [];
+            if(_source.empty) return;
+
+            OggPage p = _source.front;
+            size_t start = _segOffset;
+            size_t end = _segOffset;
+            ubyte segSize = void;
+
+            do
+            {
+                segSize = p.header.segmentSizes[_nextSeg++];
+                end += segSize;
+
+                if (segSize != 0xff)
+                {
+                    _packet ~= p.data[start .. end].dup;
+                    if (_nextSeg == p.header.segmentSizes.length)
+                    {
+                        _source.popFront();
+                        _nextSeg = 0;
+                        start = 0;
+                        end = 0;
+                    }
+                }
+                else if (_nextSeg == p.header.segmentSizes.length)
+                {
+                    assert(end == p.data.length);
+                    _packet ~= p.data[start .. $];
+                    _source.popFront();
+                    p = _source.front;
+                    _nextSeg = 0;
+                    start = 0;
+                    end = 0;
+                }
+            }
+            while(segSize == 0xff);
+
+            _segOffset = end;
+        }
+
+        R _source;
+        size_t _segOffset;
+        size_t _nextSeg;
+        ubyte[] _packet;
+    }
+
+    return Result(source);
+}
