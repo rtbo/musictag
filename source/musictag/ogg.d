@@ -21,50 +21,53 @@ immutable(ubyte)[] capturePattern = ['O', 'g', 'g', 'S'];
 /// to it is to be kept
 auto oggPageRange(R)(R range) if (isBytesInputRange!R)
 {
-    struct Result(R) if (isBytesInputRange!R)
+    return OggPageRange!R(range);
+}
+
+
+private struct OggPageRange(R) if (isBytesInputRange!R)
+{
+    this (R range)
     {
-        this (R range)
-        {
-            _range = range;
-            next();
-        }
-
-        @property bool empty()
-        {
-            return _range.empty;
-        }
-
-        @property auto front()
-        {
-            return OggPage(_header, _data);
-        }
-
-        void popFront()
-        {
-            next();
-        }
-
-    private:
-
-        void next()
-        {
-            _range.findPattern(capturePattern);
-            if (!_range.empty)
-            {
-                _header = OggPageHeader.parse(_range);
-                _data.length = _header.pageSize;
-                _data = readBytes(_range, _data);
-            }
-        }
-
-        R _range;
-        OggPageHeader _header;
-        ubyte[] _data;
+        _range = range;
+        next();
     }
 
-    return Result!R(range);
+    @property bool empty()
+    {
+        return _range.empty;
+    }
 
+    @property auto front()
+    {
+        return OggPage(_header, _data);
+    }
+
+    void popFront()
+    {
+        next();
+    }
+
+private:
+
+    void next()
+    {
+        _range.findPattern(capturePattern);
+        if (!_range.empty)
+        {
+            _header = OggPageHeader.parse(_range);
+            _data.length = _header.pageSize;
+            _data = readBytes(_range, _data);
+        }
+    }
+
+    R _range;
+    OggPageHeader _header;
+    ubyte[] _data;
 }
+
+static assert(isOggPageInputRange!(OggPageRange!BufferedFileRange));
+
 
 struct OggPage
 {
