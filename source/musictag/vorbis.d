@@ -2,7 +2,8 @@ module musictag.vorbis;
 
 import musictag.tag;
 import musictag.ogg;
-import musictag.support : isBytesInputRange, decodeLittleEndian;
+import musictag.support : decodeLittleEndian;
+import musictag.bitstream : isBytesInputRange;
 
 import std.exception : enforce;
 
@@ -104,7 +105,7 @@ private:
 
 VorbisTag readVorbisTag(string filename)
 {
-    import musictag.support : BufferedFileRange;
+    import musictag.bitstream : BufferedFileRange;
     import std.stdio : File;
 
     return readVorbisTag(BufferedFileRange(File(filename, "rb")));

@@ -1,7 +1,8 @@
 module musictag.ogg;
 
-import musictag.tag;
-import musictag.support;
+import musictag.tag : Tag;
+import musictag.support : decodeLittleEndian;
+import musictag.bitstream : BufferedFileRange, isBytesInputRange, readBytes;
 
 import std.exception : enforce, assumeUnique;
 import std.range : isInputRange, ElementType;
