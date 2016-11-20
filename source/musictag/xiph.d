@@ -116,6 +116,7 @@ struct XiphComment
 
         _vendor = cast(string)data[4 .. vlen+4].idup;
         uint num = decodeLittleEndian!uint(data[4+vlen .. 8+vlen]);
+
         data = data[8+vlen .. $];
 
         while(num-- && data.length > 4)
@@ -123,9 +124,10 @@ struct XiphComment
             import std.uni : toUpper;
 
             immutable len = decodeLittleEndian!uint(data[0 .. 4]);
-            enforce(data.length > 4+len, "corrupted XiphComment");
+            enforce(data.length >= 4+len, "corrupted XiphComment");
 
             string field = cast(string)data[4 .. 4+len];
+
             immutable split = findSplit(field, "=");
             enforce(split[0].length && split[2].length);
             _comments[toUpper(split[0])] = split[2];
