@@ -1,10 +1,348 @@
+/// This module provides primitives to read data from data streams
+/// (File or network). Primitives range from static interfaces that determine
+/// capabilities of stream at compile time to functions that read data
+/// out of a stream in an expected binary format (integers, strings, ...).
+/// Is also provided utilities that allows reading integers on a bit by bit
+/// basis.
+/// Due to nature of IO data streams, mainly only input ranges are supported.
+/// In addition, some streams may provide a Seekable interface, from which
+/// other utilities can take advantage.
 module musictag.bitstream;
 
 import std.stdio : File;
 import std.range : isInputRange, ElementType;
 import std.traits : isIntegral, Unqual;
 import std.exception : enforce;
+import std.typecons : Flag, Yes, No;
 import std.range.primitives;
+
+
+private alias FileByChunk = typeof(File("f", "rb").byChunk(4));
+
+
+/// Checks weither T conforms to ByteChunkRange static interface,
+/// which is an input range of byte chunks (aka ubyte[])
+enum isByteChunkRange(T) =  isInputRange!T &&
+                            is(Unqual!(ElementType!T) == ubyte[]);
+
+static assert(isByteChunkRange!FileByChunk);
+
+/// Checks weither something is an input range of bytes
+enum isByteRange(T) = isInputRange!T && is(Unqual!(ElementType!T) == ubyte);
+
+/// Checks weither something has method readBuf.
+enum hasReadBuf(T) = is(typeof((T t) {
+    ubyte[] data1 = t.readBuf(new ubyte[4]);
+}));
+
+/// Checks weither something has method seek and property tell.
+enum isSeekable(T) = is(typeof((T t) {
+    import std.stdio : SEEK_CUR;
+    ulong pos = t.tell();
+    t.seek(4);
+    t.seek(4, SEEK_CUR);
+}));
+
+/// Checks weither something has a name property
+enum hasName(T) = is(typeof((T t) {
+    string n = t.name;
+}));
+
+
+/// Builds a byte range with the supplied file.
+/// bufSize is the internal buffer size that will be used
+/// by the byte range.
+/// The returned range has following capabilities:
+///  - isByteRange
+///  - hasReadBuf
+///  - isSeekable
+///  - hasLength
+///  - hasName
+auto byteRange(File file, size_t bufSize=FileByteRange.defaultBufSize)
+{
+    return FileByteRange(file, bufSize);
+}
+
+/// Builds a byte range with the supplied generic byte chunk range.
+/// The returned range has following capabilities:
+///  - isByteRange
+///  - hasReadBuf
+auto byteRange(R)(R range)
+if (isByteChunkRange!R)
+{
+    return ByteRange!R(range);
+}
+
+
+// TODO:    check design of reader function that returns the range
+//          to give chaining possibility
+
+/// Read bytes from the supplied BytesInputRange to the supplied buffer
+/// and return what could be read.
+/// Takes advantage of readBuf method if available.
+// ubyte[] readBytes(R)(ref R range, ubyte[] buf)
+// if (isByteRange!R && hasReadBuf!R)
+// {
+//     return range.readBuf(buf);
+// }
+
+/// Ditto
+// ubyte[] readBytes(R)(ref R range, ubyte[] buf)
+// if (isBytesRange!R && !hasReadBuf!R)
+// {
+//     size_t pos;
+//     while(pos < buf.length && !range.empty)
+//     {
+//         buf[pos] = range.front;
+//         pos++;
+//         range.popFront();
+//     }
+//     return buf[0 .. pos];
+// }
+
+
+/// Reads from the supplied data source an integer encoded according byteOrder
+/// over numBytes bytes.
+T readInteger(T, R)(ref R range, Flag!"msbFirst" byteOrder, in size_t numBytes=T.sizeof)
+if (isIntegral!T && isByteRange!R)
+{
+    if (byteOrder == Yes.msbFirst)
+        return readIntegerTplt!(T, R, Yes.msbFirst)(range, numBytes);
+    else return readIntegerTplt!(T, R, No.msbFirst)(range, numBytes);
+}
+
+/// Reads from the supplied data source an integer encoded in little endian
+/// over numBytes bytes.
+T readLittleEndian(T, R)(ref R range, in size_t numBytes=T.sizeof)
+{
+    return readIntegerTplt!(T, R, No.msbFirst)(range, numBytes);
+}
+
+/// Reads from the supplied data source an integer encoded in big endian
+/// over numBytes bytes.
+T readBigEndian(T, R)(ref R range, in size_t numBytes=T.sizeof)
+{
+    return readIntegerTplt!(T, R, Yes.msbFirst)(range, numBytes);
+}
+
+private template readIntegerTplt(T, R, Flag!"msbFirst" byteOrder)
+{
+    T readIntegerTplt(ref R range, in size_t numBytes)
+    in { assert(numBytes <= T.sizeof); }
+    body
+    {
+        T res = 0;
+        foreach (i; 0 .. numBytes)
+        {
+            enforce(!range.empty);
+            immutable shift = 8 * (
+                byteOrder == Yes.msbFirst ? (numBytes - i - 1) : i
+            );
+            res |= range.front << shift;
+            range.popFront();
+        }
+        return res;
+    }
+}
+
+
+static assert(isByteRange!FileByteRange);
+static assert(hasReadBuf!FileByteRange);
+static assert(isSeekable!FileByteRange);
+static assert(hasLength!FileByteRange);
+static assert(hasName!FileByteRange);
+
+/// A byte range encapsulating a file. Provides:
+///  - isByteRange
+///  - hasReadBuf
+///  - isSeekable
+///  - hasLength
+///  - hasName
+struct FileByteRange
+{
+    import std.stdio : SEEK_SET;
+
+    /// default internal buffer size
+    enum defaultBufSize = 4096;
+
+    /// Build a FileByteStream
+    this(File file, size_t bufSize=defaultBufSize)
+    {
+        this(file, new ubyte[bufSize]);
+    }
+
+    ///
+    this(File file, ubyte[] buffer)
+    in {
+        assert(buffer.length > 0);
+    }
+    body {
+        _file = file;
+        _buffer = buffer;
+        prime();
+    }
+
+    /// Implementation of InputRange
+    @property bool empty()
+    {
+        return _chunk.length == 0;
+    }
+
+    /// Ditto
+    @property ubyte front()
+    {
+        return _chunk[0];
+    }
+
+    /// Ditto
+    void popFront()
+    {
+        _chunk = _chunk[1 .. $];
+        if (!_chunk.length) prime();
+    }
+
+
+    /// Read data from file and places it in the supplied buffer.
+    /// Returns a slice of the supplied buffer corresponding to what
+    /// could actually be read.
+    ubyte[] readBuf(ubyte[] buf)
+    {
+        import std.algorithm : min;
+
+        size_t done = 0;
+        do {
+            immutable until = min(_chunk.length, buf.length-done);
+            buf[done .. done+until] = _chunk[0 .. until];
+            _chunk = _chunk[until .. $];
+            done += until;
+            if (!_chunk.length) prime();
+        }
+        while(done < buf.length && _chunk.length != 0);
+        return buf[0 .. done];
+    }
+
+    /// How many bytes remain
+    @property ulong length()
+    {
+        return size - tell;
+    }
+
+    /// The file name.
+    /// See std.stdio.File.name
+    @property string name() const
+    {
+        return _file.name;
+    }
+
+    /// See std.stdio.File.size
+    @property ulong size()
+    {
+        return _file.size;
+    }
+
+    /// See std.stdio.File.tell
+    @property ulong tell() const
+    {
+        return _file.tell() - cast(ulong)_chunk.length;
+    }
+
+    /// See std.stdio.File.seek
+    /// Invalidate the internal buffer
+    void seek(long pos, int origin=SEEK_SET)
+    {
+        _file.seek(pos, origin);
+        _chunk = [];
+        prime();
+    }
+
+private:
+
+    void prime()
+    {
+        _chunk = _file.rawRead(_buffer);
+        if (_chunk.length == 0) _file.detach();
+    }
+
+    File _file;
+    ubyte[] _chunk;
+    ubyte[] _buffer;
+}
+
+
+static assert(isByteRange!(ByteRange!FileByChunk));
+static assert(hasReadBuf!(ByteRange!FileByChunk));
+static assert(!isSeekable!(ByteRange!FileByChunk));
+static assert(!hasLength!(ByteRange!FileByChunk));
+static assert(!hasName!(ByteRange!FileByChunk));
+
+
+/// A byte range adapter for a byte chunk range. Provides:
+///  - isByteRange
+///  - hasReadBuf
+struct ByteRange(R) if (isByteChunkRange!R)
+{
+    this(R source)
+    {
+        _source = source;
+        if (!_source.empty) _chunk = _source.front;
+    }
+
+    /// Implementation of input range interface
+    @property bool empty()
+    {
+        return _chunk.length == 0 && _source.empty;
+    }
+
+    /// Ditto
+    @property auto front()
+    {
+        return _chunk[0];
+    }
+
+    /// Ditto
+    void popFront()
+    {
+        _chunk = _chunk[1 .. $];
+        if (_chunk.length == 0)
+        {
+            _source.popFront();
+            if (!_source.empty) _chunk = _source.front;
+        }
+    }
+
+    /// Read data and places it in the supplied buffer.
+    /// Returns a slice of the supplied buffer corresponding to what
+    /// could actually be read.
+    ubyte[] readBuf(ubyte[] buf)
+    {
+        import std.algorithm : min;
+
+        size_t done = 0;
+        do {
+            immutable until = min(_chunk.length, buf.length-done);
+            buf[done .. done+until] = _chunk[0 .. until];
+            _chunk = _chunk[until .. $];
+            done += until;
+            if (!_chunk.length)
+            {
+                _source.popFront();
+                if (!_source.empty) _chunk = _source.front;
+            }
+        }
+        while(done < buf.length && _chunk.length != 0);
+        return buf[0 .. done];
+    }
+
+private:
+
+    alias Chunk = ElementType!R;
+
+    R _source;
+    Chunk _chunk;
+}
+
+
+
 
 /// Checks weither the supplied type conforms to ByteInputRange static interface,
 /// that is InputRange of ubytes, a name property and a findPattern method that
@@ -56,30 +394,6 @@ if (isBytesInputRange!R && !isBufBytesInputRange!R)
     return buf[0 .. pos];
 }
 
-
-/// Read len bytes from the supplied ReadBufRange type and return what
-/// could be read. Possibly returns a slice of the range internal buffer
-/// if range internal buffer conforms to BufBytesInputRange and if enough
-/// available bytes in the buffer. Otherwise, allocates and return a new
-/// buffer. Returned buffer may be invalidated after next data fetch
-/// from the range, and data should be duplicated if needed to be kept.
-const(ubyte)[] readBytes(R)(ref R range, size_t len) if (isBufBytesInputRange!R)
-{
-    return range.readBuf(len);
-}
-
-/// Ditto
-const(ubyte)[] readBytes(R)(ref R range, size_t len)
-if (isInputRange!R && !isReadBytesRange!R)
-{
-    // return type const or not const?
-    ubyte[] buf = new ubyte[len];
-    return readBytes(range, buf);
-}
-
-
-static assert(isBytesInputRange!BufferedFileRange);
-static assert(isBufBytesInputRange!BufferedFileRange);
 
 
 /// Buffered file input range.
@@ -348,6 +662,7 @@ version (unittest)
         testFindPatternInBufferedFileRange(0, 0);        // testing file only contains pattern
     }
 }
+
 
 
 auto bitRange(R)(ref R source)
