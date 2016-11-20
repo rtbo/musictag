@@ -40,6 +40,6 @@ interface Tag {
     @property int year() const;
 
     /// Attached picture (e.g. album cover)
-    @property const(byte)[] picture() const;
+    @property const(ubyte)[] picture() const;
 
 }

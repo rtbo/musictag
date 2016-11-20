@@ -86,7 +86,7 @@ class Id3v2Tag : Tag
     }
 
     /// ditto
-    @property const(byte)[] picture() const { return []; }
+    @property const(ubyte)[] picture() const { return []; }
 
     /// Offset the tag is located (most often 0 with id3v2)
     @property size_t offset() const { return _offset; }

@@ -82,7 +82,7 @@ class XiphTag : Tag
     }
 
     /// Ditto
-    @property const(byte)[] picture() const
+    @property const(ubyte)[] picture() const
     {
         return null;
     }
