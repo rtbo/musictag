@@ -2,7 +2,7 @@ module musictag.bitstream;
 
 import std.stdio : File;
 import std.range : isInputRange, ElementType;
-import std.traits : isIntegral;
+import std.traits : isIntegral, Unqual;
 import std.exception : enforce;
 import std.range.primitives;
 
@@ -351,14 +351,13 @@ version (unittest)
 
 
 auto bitRange(R)(ref R source)
-if (isInputRange!R && is(ElementType!R == ubyte))
+if (isInputRange!R && is(Unqual!(ElementType!R) == ubyte))
 {
     return BitRange!R(source);
 }
 
 
 private struct BitRange(R)
-if (isInputRange!R && is(ElementType!R == ubyte))
 {
     this(ref R source)
     {
