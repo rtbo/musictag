@@ -44,6 +44,9 @@ enum hasName(T) = is(typeof((T t) {
 }));
 
 
+static assert(isByteRange!(ubyte[]));
+static assert(isByteRange!(const(ubyte)[]));
+
 /// Builds a byte range with the supplied file.
 /// bufSize is the internal buffer size that will be used
 /// by the byte range.
@@ -175,6 +178,28 @@ string readStringUtf8(R)(ref R range) if (isByteRange!R)
 }
 
 
+unittest {
+    import std.range : iota;
+    import std.array : array;
+
+    immutable(ubyte)[] pattern = iota(ubyte(16)).array().idup;
+
+    auto data = pattern.dup;
+    assert(data.readBigEndian!uint() == 0x00010203);
+    assert(data.readLittleEndian!uint(3) == 0x060504);
+    assert(data.readByte() == 0x07);
+    assert(data.length == 8);
+    assert(data.readBigEndian!ulong() == 0x08090a0b_0c0d0e0f);
+    assert(data.empty);
+
+    data = pattern.dup;
+    auto bytes = data.readBytes(new ubyte[pattern.length]);
+    assert(data.length == 0);
+    assert(bytes == pattern);
+}
+
+
+// only for static assertions
 private alias FileByChunk = typeof(File("f", "rb").byChunk(4));
 static assert(isByteChunkRange!FileByChunk);
 
