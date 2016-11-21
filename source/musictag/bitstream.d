@@ -75,7 +75,7 @@ if (isByteChunkRange!R)
 // TODO:    check design of reader function that returns the range
 //          to give chaining possibility
 
-/// Read bytes from the supplied BytesInputRange to the supplied buffer
+/// Read bytes from the supplied ByteRange to the supplied buffer
 /// and return what could be read.
 /// Takes advantage of readBuf method if available.
 ubyte[] readBytes(R)(ref R range, ubyte[] buf)
@@ -99,7 +99,7 @@ if (isByteRange!R && !hasReadBuf!R)
 }
 
 
-/// Convenience function that advances the range by one byte and returns it.
+/// Convenience function that advances the range by the one returned byte.
 ubyte readByte(R)(ref R range) if (isByteRange!R)
 in { assert(!range.empty); }
 body
@@ -134,6 +134,8 @@ T readBigEndian(T, R)(ref R range, in size_t numBytes=T.sizeof)
     return readIntegerTplt!(T, R, Yes.msbFirst)(range, numBytes);
 }
 
+// having byteOrder known at compile time should make the compiler life easier
+// during optimization
 private template readIntegerTplt(T, R, Flag!"msbFirst" byteOrder)
 {
     T readIntegerTplt(ref R range, in size_t numBytes)
