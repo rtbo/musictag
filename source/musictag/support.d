@@ -5,7 +5,6 @@ import std.traits : isIntegral;
 import std.typecons : Flag, Yes, No;
 
 
-
 /// Decodes the supplied bytes into a native integer
 /// assuming byte order given as parameter
 T decodeInteger(T)(const(ubyte)[] data, Flag!"msbFirst" byteOrder)

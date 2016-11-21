@@ -1,14 +1,13 @@
 module musictag.ogg;
 
 import musictag.tag : Tag;
-import musictag.support : decodeLittleEndian;
-import musictag.bitstream : BufferedFileRange, isBytesInputRange, readBytes;
+import musictag.bitstream;
 
 import std.exception : enforce, assumeUnique;
 import std.range : isInputRange, ElementType;
 
 
-enum isOggPageInputRange(R) = isInputRange!R && is(ElementType!R == OggPage);
+enum isOggPageRange(R) = isInputRange!R && is(ElementType!R == OggPage);
 
 
 immutable(ubyte)[] capturePattern = ['O', 'g', 'g', 'S'];
@@ -19,13 +18,13 @@ immutable(ubyte)[] capturePattern = ['O', 'g', 'g', 'S'];
 /// (filled with new data after each popFront call), therefore
 /// the dup property of the page data should be used if a reference
 /// to it is to be kept
-auto oggPageRange(R)(R range) if (isBytesInputRange!R)
+auto oggPageRange(R)(R range) if (isByteRange!R)
 {
     return OggPageRange!R(range);
 }
 
 
-private struct OggPageRange(R) if (isBytesInputRange!R)
+private struct OggPageRange(R) if (isByteRange!R)
 {
     this (R range)
     {
@@ -66,7 +65,7 @@ private:
     ubyte[] _data;
 }
 
-static assert(isOggPageInputRange!(OggPageRange!BufferedFileRange));
+static assert(isOggPageRange!(OggPageRange!FileByteRange));
 
 
 struct OggPage
@@ -112,24 +111,20 @@ struct OggPageHeader
 
 private:
 
-    enum commonSize = 27;
+    enum commonSize = 23;
 
     static OggPageHeader parse(R)(ref R r)
     {
-        ubyte[commonSize] buf;
-        auto bytes = readBytes(r, buf[]);
-        assert(bytes.length == commonSize && bytes[0 .. 4] == capturePattern);
-
         OggPageHeader oph;
-        oph._streamVersion = bytes[4];
-        oph._flags = bytes[5];
-        oph._position = decodeLittleEndian!ulong(bytes[6 .. 14]);
-        oph._streamSerialNumber = decodeLittleEndian!uint(bytes[14 .. 18]);
-        oph._pageSequence = decodeLittleEndian!uint(bytes[18 .. 22]);
-        oph._pageChecksum = decodeLittleEndian!uint(bytes[22 .. 26]);
-        oph._numSegments =  bytes[26];
+        oph._streamVersion = r.readByte();
+        oph._flags = r.readByte();
+        oph._position = r.readLittleEndian!ulong(8);
+        oph._streamSerialNumber = r.readLittleEndian!uint(4);
+        oph._pageSequence = r.readLittleEndian!uint(4);
+        oph._pageChecksum = r.readLittleEndian!uint(4);
+        oph._numSegments =  r.readByte();
 
-        oph._segmentSizes = readBytes(r, new ubyte[oph._numSegments]);
+        oph._segmentSizes = r.readBytes(new ubyte[oph._numSegments]);
         enforce(oph._segmentSizes.length == oph._numSegments);
 
         return oph;
@@ -147,7 +142,7 @@ private:
 
 
 
-auto oggPacketRange(R)(R source) if (isOggPageInputRange!R)
+auto oggPacketRange(R)(R source) if (isOggPageRange!R)
 {
     struct Result
     {

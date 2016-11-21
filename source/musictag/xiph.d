@@ -1,6 +1,7 @@
 module musictag.xiph;
 
 import musictag.tag : Tag;
+import musictag.bitstream;
 
 /// Xiph comment tag
 class XiphTag : Tag
@@ -107,32 +108,28 @@ struct XiphComment
 
     this(const(ubyte)[] data)
     {
-        import musictag.support : decodeLittleEndian;
         import std.algorithm : findSplit;
         import std.exception : enforce;
 
-        immutable vlen = decodeLittleEndian!uint(data[0 .. 4]);
-        enforce(data.length > vlen+4, "corrupted XiphComment");
+        auto orig = data.length;
+        immutable vlen = data.readLittleEndian!uint(4);
+        assert(orig == data.length+4);
+        enforce(data.length >= vlen+4, "corrupted XiphComment");
+        _vendor = data.readStringUtf8(vlen);
 
-        _vendor = cast(string)data[4 .. vlen+4].idup;
-        uint num = decodeLittleEndian!uint(data[4+vlen .. 8+vlen]);
-
-        data = data[8+vlen .. $];
-
+        uint num = data.readLittleEndian!uint(4);
         while(num-- && data.length > 4)
         {
             import std.uni : toUpper;
 
-            immutable len = decodeLittleEndian!uint(data[0 .. 4]);
-            enforce(data.length >= 4+len, "corrupted XiphComment");
+            immutable len = data.readLittleEndian!uint(4);
+            enforce(data.length >= len, "corrupted XiphComment");
 
-            string field = cast(string)data[4 .. 4+len];
+            string field = data.readStringUtf8(len);
 
             immutable split = findSplit(field, "=");
             enforce(split[0].length && split[2].length);
             _comments[toUpper(split[0])] = split[2];
-
-            data = data[4+len .. $];
         }
     }
 

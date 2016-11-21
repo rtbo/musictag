@@ -1,7 +1,6 @@
 module musictag.flac;
 
 import musictag.xiph : XiphTag, XiphComment;
-import musictag.support : decodeBigEndian;
 import musictag.bitstream;
 
 import std.exception : enforce;
@@ -29,20 +28,17 @@ private:
 
 FlacTag readFlacTag(string filename)
 {
-    import musictag.bitstream : BufferedFileRange;
     import std.stdio : File;
-    return readFlacTag(BufferedFileRange(File(filename, "rb")));
+    return readFlacTag(FileByteRange(File(filename, "rb")));
 }
 
 FlacTag readFlacTag(R)(R source)
-if (isBytesInputRange!R)
+if (isByteRange!R)
 {
     import std.stdio;
-    ubyte[4] buf4;
     ubyte[] buf;
     // must be at the start of stream
-    enforce(source.findPattern(streamPattern) == 0);
-    readBytes(source, buf4[]); // eat pattern. FIXME: change that sh..
+    enforce(source.findPattern(streamPattern) == streamPattern.length);
 
     XiphComment comment;
     PictureBlock picture;
@@ -51,7 +47,7 @@ if (isBytesInputRange!R)
 
     while (!source.empty)
     {
-        immutable header = MetadataBlockHeader(readBytes(source, buf4[]));
+        immutable header = MetadataBlockHeader(source.readBigEndian!uint());
         writefln("header.type = %s", header.type);
         writefln("header.isLast = %s", header.isLast);
         writefln("header.size = %s", header.size);
@@ -111,9 +107,9 @@ struct MetadataBlockHeader
 
 private:
 
-    this (const(ubyte)[] data)
+    this (uint data)
     {
-        _data = decodeBigEndian!uint(data[0 .. 4]);
+        _data = data;
     }
 
     uint _data;
@@ -205,19 +201,17 @@ private:
 
     this(const(ubyte)[] data)
     {
-        _pictureType = cast(PictureType)(decodeBigEndian!uint(data[0 .. 4]));
-        auto l = decodeBigEndian!uint(data[4 .. 8]);
-        _mimeType = cast(string)(data[8 .. 8+l]);
-        data = data[8+l .. $];
-        l = decodeBigEndian!uint(data[0 .. 4]);
-        _description = cast(string)(data[4 .. 4+l]);
-        data = data[4+l .. $];
-        _width = decodeBigEndian!uint(data[0 .. 4]);
-        _height = decodeBigEndian!uint(data[4 .. 8]);
-        _colorDepth = decodeBigEndian!uint(data[8 .. 12]);
-        _numColors = decodeBigEndian!uint(data[12 .. 16]);
-        l = decodeBigEndian!uint(data[16 .. 20]);
-        _data = data[20 .. $].dup;
+        _pictureType = cast(PictureType)data.readBigEndian!uint(4);
+        auto l = data.readBigEndian!uint(4);
+        _mimeType = data.readStringUtf8(l);
+        l = data.readBigEndian!uint(4);
+        _description = data.readStringUtf8(l);
+        _width = data.readBigEndian!uint(4);
+        _height = data.readBigEndian!uint(4);
+        _colorDepth = data.readBigEndian!uint(4);
+        _numColors = data.readBigEndian!uint(4);
+        l = data.readBigEndian!uint(4);
+        _data = data[0 .. l].dup;
     }
 
     PictureType _pictureType;

@@ -1,21 +1,19 @@
 module musictag.vorbis;
 
 import musictag.xiph : XiphTag, XiphComment;
-import musictag.support : decodeLittleEndian;
-import musictag.bitstream : isBytesInputRange;
+import musictag.bitstream;
 
 import std.exception : enforce;
 
 
 XiphTag readVorbisTag(string filename)
 {
-    import musictag.bitstream : BufferedFileRange;
     import std.stdio : File;
 
-    return readVorbisTag(BufferedFileRange(File(filename, "rb")));
+    return readVorbisTag(FileByteRange(File(filename, "rb")));
 }
 
-XiphTag readVorbisTag(R)(R br) if (isBytesInputRange!R)
+XiphTag readVorbisTag(R)(R br) if (isByteRange!R)
 {
     import musictag.ogg : oggPageRange, oggPacketRange;
     import std.algorithm : map;
@@ -65,6 +63,11 @@ struct Packet
     }
 
 private:
+
+    this(ubyte[] data)
+    {
+        _data = data;
+    }
 
     ubyte[] _data;
 }
