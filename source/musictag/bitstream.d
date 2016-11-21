@@ -72,8 +72,14 @@ if (isByteChunkRange!R)
 }
 
 
+
+// READING FUNCTIONS
+
 // TODO:    check design of reader function that returns the range
 //          to give chaining possibility
+
+
+// raw bytes reading
 
 /// Read bytes from the supplied ByteRange to the supplied buffer
 /// and return what could be read.
@@ -109,6 +115,7 @@ body
     return res;
 }
 
+// Integer reading
 
 /// Reads from the supplied data source an integer encoded according byteOrder
 /// over numBytes bytes.
@@ -157,29 +164,6 @@ private template readIntegerTplt(T, R, Flag!"msbFirst" byteOrder)
 }
 
 
-/// Reads len chars out of range.
-/// Do not check for valid unicode.
-string readStringUtf8(R)(ref R range, size_t len) if (isByteRange!R)
-{
-    import std.exception : assumeUnique;
-    return cast(string)(assumeUnique(readBytes(range, new ubyte[len])));
-}
-
-/// Reads a utf-8 string until a null character is found.
-/// Do not check for valid unicode;
-string readStringUtf8(R)(ref R range) if (isByteRange!R)
-{
-    import std.exception : assumeUnique;
-    char[] res;
-    while(!range.empty && range.front != 0)
-    {
-        res ~= range.front;
-        range.popFront();
-    }
-    return assumeUnique(res);
-}
-
-
 unittest {
     import std.range : iota;
     import std.array : array;
@@ -199,6 +183,282 @@ unittest {
     assert(data.length == 0);
     assert(bytes == pattern);
 }
+
+
+// String reading
+
+
+/// Reads len bytes out of the range and convert to utf-8.
+/// Do not check for valid unicode.
+string readStringUtf8(R)(ref R range, size_t len) if (isByteRange!R)
+{
+    import std.exception : assumeUnique;
+    return cast(string)(assumeUnique(readBytes(range, new ubyte[len])));
+}
+
+/// Reads a utf-8 string until a null character is found or
+/// until range exhausts. Do not check for valid unicode.
+string readStringUtf8(R)(ref R range) if (isByteRange!R)
+{
+    import std.exception : assumeUnique;
+    char[] res;
+    while(!range.empty && range.front != 0)
+    {
+        res ~= range.front;
+        range.popFront();
+    }
+    return assumeUnique(res);
+}
+
+
+/// Reads len bytes from range and transcode them from latin-1 to utf-8.
+/// Do not check for valid unicode.
+string readStringLatin1(R)(ref R range, size_t len) if (isByteRange)
+{
+    import std.utf : encode;
+
+    string res;
+    char[4] buf = void;
+    auto bytes = range.readBytes(new char[len]);
+
+    foreach (dchar c; bytes) // latin-1 is unicode code points from 0 to 255
+    {
+        immutable len = encode(buf, c);
+        res ~= buf[0 .. len];
+    }
+
+    return res;
+}
+
+/// Reads bytes from range and transcode them from latin-1 to utf-8
+/// until a null character is found. Do not check for valid unicode.
+string readStringLatin1(R)(ref R range) if (isByteRange!R)
+{
+    import std.utf : encode;
+
+    string res;
+    char[4] buf = void;
+
+    while(!range.empty && range.front != 0)
+    {
+        immutable len = encode(buf, dchar(range.front));
+        res ~= buf[0 .. len];
+    }
+
+    return res;
+}
+
+
+private {
+    // BOM is always read big endian from the data source.
+    // Therefore a BOM in natural order indicates big endian
+    // whatever the processor endianness.
+    enum wchar beBom = 0xfeff;
+    enum wchar leBom = 0xfffe;
+
+}
+
+/// Reads len bytes from range and transcode them from UTF16 with BOM to utf-8.
+/// Attempts to read up to len bytes and stop if the range exhausts
+/// Throws if the 2 first bytes are not a BOM.
+/// Do not check for valid unicode.
+string readStringUtf16Bom(R)(ref R range, size_t len) if (isByteRange!R)
+{
+    auto bom = bytes.readBigEndian!wchar();
+
+    if (bom == beBom)
+        return range.readUtf16Tplt!(Yes.msbFirst, No.stopsAtNull)(len);
+    else if (bom == leBom)
+        return range.readUtf16Tplt!(No.msbFirst, No.stopsAtNull)(len);
+    else
+    {
+        import std.format : format;
+        throw new Exception(format("not a BOM: 0x%x", bom));
+    }
+}
+
+/// Reads bytes from range and transcode them from UTF16 with BOM to utf-8.
+/// Attempts to read until a null char is found or the range exhausts.
+/// Throws if the 2 first bytes are not a BOM.
+/// Do not check for valid unicode.
+string readStringUtf16Bom(R)(ref R range) if (isByteRange!R)
+{
+    auto bom = range.readBigEndian!wchar();
+
+    if (bom == beBom)
+        return range.readUtf16Tplt!(Yes.msbFirst, Yes.stopsAtNull)(-1);
+    else if (bom == leBom)
+        return range.readUtf16Tplt!(No.msbFirst, Yes.stopsAtNull)(-1);
+    else
+    {
+        import std.format : format;
+        throw new Exception(format("not a BOM: 0x%x", bom));
+    }
+}
+
+
+/// Reads len bytes from range and transcode them from UTF16 BE to utf-8.
+/// Attempts to read up to len bytes and stop if the range exhausts
+/// Do not check for valid unicode.
+string readStringUtf16BE(R)(ref R range, size_t len) if (isByteRange!R)
+{
+    return range.readUtf16Tplt!(Yes.msbFirst, No.stopsAtNull)(len);
+}
+
+/// Reads len bytes from range and transcode them from UTF16 LE to utf-8.
+/// Attempts to read up to len bytes and stop if the range exhausts
+/// Do not check for valid unicode.
+string readStringUtf16LE(R)(ref R range, size_t len) if (isByteRange!R)
+{
+    return range.readUtf16Tplt!(No.msbFirst, No.stopsAtNull)(len);
+}
+
+/// Reads bytes from range and transcode them from UTF16 BE to utf-8.
+/// Attempts to read until a null char is found or the range exhausts.
+/// Do not check for valid unicode.
+string readStringUtf16BE(R)(ref R range) if (isByteRange!R)
+{
+    return range.readUtf16Tplt!(Yes.msbFirst, Yes.stopsAtNull)(-1);
+}
+
+/// Reads bytes from range and transcode them from UTF16 LE to utf-8.
+/// Attempts to read until a null char is found or the range exhausts.
+/// Do not check for valid unicode.
+string readStringUtf16LE(R)(ref R range) if (isByteRange!R)
+{
+    return range.readUtf16Tplt!(No.msbFirst, Yes.stopsAtNull)(-1);
+}
+
+
+private template readUtf16Tplt( Flag!"msbFirst" byteOrder,
+                                Flag!"stopsAtNull" stopsAtNull)
+{
+    string readUtf16Tplt(R)(ref R range, size_t len)
+    {
+        import std.uni : isSurrogateHi;
+        import std.utf : decodeFront, encode;
+
+        string res;
+        char[4] buf = void;
+        wchar[2] wbuf;
+
+        while(!range.empty && len-- != 0)
+        {
+            size_t units=1;
+            wbuf[0] = range.readIntegerTplt!(wchar, R, byteOrder)(2);
+            if (stopsAtNull == Yes.stopsAtNull && wbuf[0] == 0) break;
+            if (isSurrogateHi(wbuf[0]))
+            {
+                enforce(!range.empty);
+                wbuf[1] = range.readIntegerTplt!(wchar, R, byteOrder)(2);
+                ++units;
+            }
+
+            auto wc = wbuf[0 .. units];
+            immutable dchar c = decodeFront(wc);
+            assert(!wc.length);
+            immutable l8 = encode(buf, c);
+            res ~= buf[0 .. l8];
+        }
+        return res;
+    }
+}
+
+
+
+
+/// Finds a pattern in the given range and passes it.
+/// Advances the range to the 1st byte passed the pattern and returns
+/// the total number of bytes advanced (including the pattern).
+/// The range is empty after that call if the pattern is not found
+/// or if the pattern are the last byte of the range.
+/// The version accepting a bool ref can be used disambiguate this
+/// situation.
+ulong eatPattern(R, P)(ref R range, P pattern)
+if (isByteRange!R && isForwardRange!P && is(Unqual!(ElementType!P) == ubyte))
+{
+    ulong adv;
+    const(ubyte)[] p = pattern.save;
+    while(p.length != 0 && !range.empty)
+    {
+        if (p[0] == range.front) p.popFront();
+        else p = pattern.save;
+
+        range.popFront();
+        ++adv;
+    }
+    return adv;
+}
+
+/// Ditto
+ulong eatPattern(R, P)(ref R range, P pattern, out bool found)
+if (isByteRange!R && isForwardRange!P && is(Unqual!(ElementType!P) == ubyte))
+{
+    ulong adv;
+    auto p = pattern.save;
+    while(!range.empty && !p.empty)
+    {
+        if (p[0] == range.front) p.popFront();
+        else p = pattern.save;
+
+        range.popFront();
+        ++adv;
+    }
+    found = p.empty;
+    return adv;
+}
+
+
+
+version (unittest)
+{
+    void testEatPatternInFileByteRange(in size_t pos, size_t filesize)
+    {
+        import std.format : format;
+        import std.algorithm : max;
+        import std.file : tempDir, write, remove;
+        import std.path : chainPath;
+        import std.conv : to;
+
+        string deleteMe = chainPath(tempDir(), "musictag.support.eatPattern.test").to!string;
+
+        auto pattern = cast(immutable (ubyte)[])"PatternToBeFound";
+        filesize = max(filesize, pos+pattern.length);
+
+        {
+            auto content = new ubyte[filesize];
+            content[] = 'X';
+            content[pos .. pos+pattern.length] = pattern;
+            write(deleteMe, content);
+        }
+
+        scope(exit) remove(deleteMe);
+
+        auto br = byteRange(File(deleteMe, "rb"));
+        immutable adv = br.eatPattern(pattern);
+        assert(
+            adv == pos+pattern.length,
+            format("testEatPatternInFileByteRange(%s, %s) returned value", pos, filesize)
+        );
+        if (filesize == pos+pattern.length) assert(br.empty);
+        else assert(!br.empty);
+    }
+
+    unittest
+    {
+        static assert (FileByteRange.defaultBufSize == 4096);
+
+        testEatPatternInFileByteRange(1000, 1234);  // in first chunk
+        testEatPatternInFileByteRange(5000, 6000);  // in second chunk
+        testEatPatternInFileByteRange(4090, 6000);  // testing partial
+        testEatPatternInFileByteRange(0, 1000);     // testing file starts with pattern
+        testEatPatternInFileByteRange(1000, 1000);  // testing file ends with pattern
+        testEatPatternInFileByteRange(0, 0);        // testing file only contains pattern
+    }
+}
+
+
+// Byte Range implementations
 
 
 // only for static assertions
@@ -401,95 +661,8 @@ private:
     Chunk _chunk;
 }
 
-/// Finds a pattern in the given range and passes it.
-/// Advances the range to the 1st byte passed the pattern and returns
-/// the total number of bytes advanced (including the pattern).
-/// The range is empty after that call if the pattern is not found
-/// or if the pattern are the last byte of the range.
-/// The version accepting a bool ref can be used disambiguate this
-/// situation.
-ulong eatPattern(R, P)(ref R range, P pattern)
-if (isByteRange!R && isForwardRange!P && is(Unqual!(ElementType!P) == ubyte))
-{
-    ulong adv;
-    const(ubyte)[] p = pattern.save;
-    while(p.length != 0 && !range.empty)
-    {
-        if (p[0] == range.front) p.popFront();
-        else p = pattern.save;
 
-        range.popFront();
-        ++adv;
-    }
-    return adv;
-}
-
-/// Ditto
-ulong eatPattern(R, P)(ref R range, P pattern, out bool found)
-if (isByteRange!R && isForwardRange!P && is(Unqual!(ElementType!P) == ubyte))
-{
-    ulong adv;
-    auto p = pattern.save;
-    while(!range.empty && !p.empty)
-    {
-        if (p[0] == range.front) p.popFront();
-        else p = pattern.save;
-
-        range.popFront();
-        ++adv;
-    }
-    found = p.empty;
-    return adv;
-}
-
-
-
-version (unittest)
-{
-    void testFindPatternInFileByteRange(in size_t pos, size_t filesize)
-    {
-        import std.format : format;
-        import std.algorithm : max;
-        import std.file : tempDir, write, remove;
-        import std.path : chainPath;
-        import std.conv : to;
-
-        string deleteMe = chainPath(tempDir(), "musictag.support.findPattern.test").to!string;
-
-        auto pattern = cast(immutable (ubyte)[])"PatternToBeFound";
-        filesize = max(filesize, pos+pattern.length);
-
-        {
-            auto content = new ubyte[filesize];
-            content[] = 'X';
-            content[pos .. pos+pattern.length] = pattern;
-            write(deleteMe, content);
-        }
-
-        scope(exit) remove(deleteMe);
-
-        auto br = byteRange(File(deleteMe, "rb"));
-        immutable adv = br.eatPattern(pattern);
-        assert(
-            adv == pos+pattern.length,
-            format("testFindPatternInFileByteRange(%s, %s) returned value", pos, filesize)
-        );
-        if (filesize == pos+pattern.length) assert(br.empty);
-        else assert(!br.empty);
-    }
-
-    unittest
-    {
-        // buffer size is 4096
-        testFindPatternInFileByteRange(1000, 1234);  // in first chunk
-        testFindPatternInFileByteRange(5000, 6000);  // in second chunk
-        testFindPatternInFileByteRange(4090, 6000);  // testing partial
-        testFindPatternInFileByteRange(0, 1000);     // testing file starts with pattern
-        testFindPatternInFileByteRange(1000, 1000);  // testing file ends with pattern
-        testFindPatternInFileByteRange(0, 0);        // testing file only contains pattern
-    }
-}
-
+// Bit by bit range
 
 auto bitRange(R)(ref R source) if (isByteRange!R)
 {
