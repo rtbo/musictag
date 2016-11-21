@@ -38,7 +38,7 @@ if (isByteRange!R)
     import std.stdio;
     ubyte[] buf;
     // must be at the start of stream
-    enforce(source.findPattern(streamPattern) == streamPattern.length);
+    enforce(source.eatPattern(streamPattern) == streamPattern.length);
 
     XiphComment comment;
     PictureBlock picture;

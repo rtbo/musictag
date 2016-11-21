@@ -374,14 +374,14 @@ private:
     Chunk _chunk;
 }
 
-/// Finds a pattern in the given range.
+/// Finds a pattern in the given range and passes it.
 /// Advances the range to the 1st byte passed the pattern and returns
-/// the number of bytes advanced.
+/// the total number of bytes advanced (including the pattern).
 /// The range is empty after that call if the pattern is not found
 /// or if the pattern are the last byte of the range.
 /// The version accepting a bool ref can be used disambiguate this
 /// situation.
-ulong findPattern(R, P)(ref R range, P pattern)
+ulong eatPattern(R, P)(ref R range, P pattern)
 if (isByteRange!R && isForwardRange!P && is(Unqual!(ElementType!P) == ubyte))
 {
     ulong adv;
@@ -398,7 +398,7 @@ if (isByteRange!R && isForwardRange!P && is(Unqual!(ElementType!P) == ubyte))
 }
 
 /// Ditto
-ulong findPattern(R, P)(ref R range, P pattern, out bool found)
+ulong eatPattern(R, P)(ref R range, P pattern, out bool found)
 if (isByteRange!R && isForwardRange!P && is(Unqual!(ElementType!P) == ubyte))
 {
     ulong adv;
@@ -442,7 +442,7 @@ version (unittest)
         scope(exit) remove(deleteMe);
 
         auto br = byteRange(File(deleteMe, "rb"));
-        immutable adv = br.findPattern(pattern);
+        immutable adv = br.eatPattern(pattern);
         assert(
             adv == pos+pattern.length,
             format("testFindPatternInFileByteRange(%s, %s) returned value", pos, filesize)

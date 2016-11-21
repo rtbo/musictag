@@ -51,7 +51,7 @@ private:
 
     void next()
     {
-        _range.findPattern(capturePattern);
+        _range.eatPattern(capturePattern);
         if (!_range.empty)
         {
             _header = OggPageHeader.parse(_range);
