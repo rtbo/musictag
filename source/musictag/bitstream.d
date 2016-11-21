@@ -147,7 +147,7 @@ private template readIntegerTplt(T, R, Flag!"msbFirst" byteOrder)
             immutable shift = 8 * (
                 byteOrder == Yes.msbFirst ? (numBytes - i - 1) : i
             );
-            res |= range.front << shift;
+            res |= T(range.front) << shift;
             range.popFront();
         }
         return res;
