@@ -243,6 +243,7 @@ string readStringLatin1(R)(ref R range) if (isByteRange!R)
     {
         immutable len = encode(buf, dchar(range.front));
         res ~= buf[0 .. len];
+        range.popFront();
     }
 
     return res;

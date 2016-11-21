@@ -3,7 +3,7 @@ module musictag.mpeg;
 import musictag.tag;
 import musictag.id3v2;
 import musictag.id3v2.framefactory;
-import musictag.support;
+import musictag.bitstream;
 
 import std.stdio : File;
 
@@ -19,13 +19,14 @@ Tag readMpegTag(string filename, FrameFactoryDg factoryBuilder=null)
     import std.exception : enforce;
 
     enforce(exists(filename) && !isDir(filename));
-    auto f = File(filename, "rb");
-
-    auto offset = findInFile(f, Id3v2Header.identifier[]);
-    if (offset != -1) return new Id3v2Tag(f, offset, factoryBuilder);
-    else return null;
+    return readMpegTag(byteRange(File(filename, "rb")));
 }
 
+/// Ditto
+Tag readMpegTag(R)(R range, FrameFactoryDg factoryBuilder=null)
+{
+    return readId3v2Tag(range, factoryBuilder);
+}
 
 
 private:

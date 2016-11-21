@@ -5,23 +5,80 @@ import musictag.id3v2.footer;
 import musictag.id3v2.framefactory;
 import musictag.id3v2.frame;
 import musictag.tag;
+import musictag.bitstream;
 
-import std.stdio;
 import std.exception : enforce;
 import std.bitmanip : bitfields;
+
+
+Id3v2Tag readId3v2Tag(string filename, FrameFactoryDg factoryDg=null)
+{
+    import std.stdio : File;
+    return readId3v2Tag(byteRange(File(filename, "rb")), factoryDg);
+}
+
+Id3v2Tag readId3v2Tag(R)(R range, FrameFactoryDg factoryDg=null)
+{
+    range.eatPattern(Id3v2Header.identifier[]);
+    enforce(!range.empty);
+    ubyte[Id3v2Header.size-Id3v2Header.identifier.length] headerData;
+
+    auto header = Id3v2Header.parse(range.readBytes(headerData[]));
+
+    auto tagData = range.readBytes(new ubyte[header.tagSize]);
+    enforce(tagData.length == header.tagSize);
+
+    if (header.unsynchronize)
+    {
+        import musictag.id3v2.support : decodeUnsynchronizedTag;
+        tagData = decodeUnsynchronizedTag(tagData);
+    }
+
+    auto frameData = tagData;
+    ExtendedHeader extendedHeader;
+    Frame[string] frames;
+
+    if (header.extendedHeader)
+    {
+        extendedHeader = new ExtendedHeader(tagData, header.majVersion);
+        frameData = frameData[extendedHeader.size .. $];
+    }
+
+    if (header.footer)
+    {
+        frameData = frameData[0 .. $-Footer.size];
+    }
+
+    auto frameFactory = factoryDg ? factoryDg(header) :
+                                    defaultFrameFactory(header);
+
+    while(frameData.length > FrameHeader.size)
+    {
+        // have we hit the padding?
+        if (frameData[0] == 0) break;
+
+        auto frameHeader = FrameHeader.parse(frameData, header.majVersion);
+        immutable frameEnd = FrameHeader.size + frameHeader.frameSize;
+        enforce(frameData.length >= frameEnd);
+
+        auto frame = frameFactory.createFrame(frameHeader, frameData[FrameHeader.size .. frameEnd]);
+        if (frame) frames[frame.identifier] = frame;
+
+        frameData = frameData[frameEnd .. $];
+    }
+
+    string filename;
+    static if (hasName!R)
+    {
+        filename = range.name;
+    }
+    return new Id3v2Tag(filename, header, extendedHeader, frames);
+}
 
 
 /// An ID3V2 tag
 class Id3v2Tag : Tag
 {
-
-    /// Builds an Id3v2 tag with an opened file, offset and frame factory.
-    /// The Tag must start at offset
-    this(File f, size_t offset, FrameFactoryDg factoryDg)
-    {
-        _offset = offset;
-        read(f, factoryDg);
-    }
 
     /// Implementation of Tag interface
     @property string filename() const { return _filename; }
@@ -88,9 +145,6 @@ class Id3v2Tag : Tag
     /// ditto
     @property const(ubyte)[] picture() const { return []; }
 
-    /// Offset the tag is located (most often 0 with id3v2)
-    @property size_t offset() const { return _offset; }
-
     /// Get the value of a text frame
     @property string textFrame(string identifier) const {
         auto frame = identifier in _frames;
@@ -103,65 +157,17 @@ class Id3v2Tag : Tag
     }
 private:
 
-    void read(File file, FrameFactoryDg factoryDg)
+    this(string filename, Id3v2Header header, ExtendedHeader extendedHeader, Frame[string] frames)
     {
-        import std.algorithm : startsWith;
-
-        ubyte[Id3v2Header.size] headerData;
-        file.seek(_offset);
-        enforce(file.rawRead(headerData[]).length == Id3v2Header.size);
-
-        assert(headerData[].startsWith(Id3v2Header.identifier[]));
-
-        _header = Id3v2Header.parse(headerData[]);
-
-        auto tagData = file.rawRead(new ubyte[_header.tagSize]);
-        enforce(tagData.length == _header.tagSize);
-
-        if (_header.unsynchronize)
-        {
-            import musictag.id3v2.support : decodeUnsynchronizedTag;
-            tagData = decodeUnsynchronizedTag(tagData);
-        }
-
-        auto frameData = tagData;
-
-        if (_header.extendedHeader)
-        {
-            _extendedHeader = new ExtendedHeader(tagData, _header.majVersion);
-            frameData = frameData[_extendedHeader.size .. $];
-        }
-
-        if (_header.footer)
-        {
-            frameData = frameData[0 .. $-Footer.size];
-        }
-
-        if (factoryDg) _frameFactory = factoryDg(_header);
-        else _frameFactory = defaultFrameFactory(_header);
-
-        while(frameData.length > FrameHeader.size)
-        {
-            // have we hit the padding?
-            if (frameData[0] == 0) break;
-
-            auto frameHeader = FrameHeader.parse(frameData, _header.majVersion);
-            immutable frameEnd = FrameHeader.size + frameHeader.frameSize;
-            enforce(frameData.length >= frameEnd);
-
-            auto frame = _frameFactory.createFrame(frameHeader, frameData[FrameHeader.size .. frameEnd]);
-            if (frame) _frames[frame.identifier] = frame;
-
-            frameData = frameData[frameEnd .. $];
-        }
-
+        _filename = filename;
+        _header = header;
+        _extendedHeader = extendedHeader;
+        _frames = frames;
     }
 
     string _filename;
-    size_t _offset;
     Id3v2Header _header;
     ExtendedHeader _extendedHeader;
-    FrameFactory _frameFactory;
     Frame[string] _frames;
 }
 
@@ -192,15 +198,16 @@ struct Id3v2Header
     /// Parses bytes data into a header.
     /// The data must start with identifier and have length >= size
     static Id3v2Header parse(const(ubyte)[] data)
-    in {
-        assert(data.length >= size);
-        assert(data[0 .. 3] == identifier);
+    in
+    {
+        assert(data.length >= size-identifier.length);
     }
-    body {
+    body
+    {
         return Id3v2Header (
-            data[3], data[4], cast(Flags)data[5],
-            ((data[6] & 0x7f) << 21) | ((data[7] & 0x7f) << 14) |
-            ((data[8] & 0x7f) << 7)  | (data[9] & 0x7f)
+            data[0], data[1], cast(Flags)data[2],
+            ((data[3] & 0x7f) << 21) | ((data[4] & 0x7f) << 14) |
+            ((data[5] & 0x7f) << 7)  | (data[6] & 0x7f)
         );
     }
 

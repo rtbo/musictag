@@ -2,7 +2,7 @@ module musictag.id3v2.builtinframes;
 
 import musictag.id3v2.frame;
 import musictag.id3v2.support;
-import musictag.support : decodeBigEndian;
+import musictag.bitstream;
 
 import std.exception : enforce;
 
@@ -14,7 +14,7 @@ class UFIDFrame : Frame
     {
         assert(header.id == "UFID");
         super(header);
-        _owner = decodeLatin1(data);
+        _owner = data.readStringLatin1();
         _data = data.idup;
     }
 
@@ -36,9 +36,8 @@ class TextFrame : Frame
         assert(header.id.length && header.id[0] == 'T' && header.id != "TXXX");
         super(header);
         enforce(data.length > 0);
-        auto encodingByte = data[0];
-        data = data[1 .. $];
-        _text = decodeString(data, encodingByte);
+        auto encodingByte = data.readByte();
+        _text = data.readString(encodingByte);
     }
 
     @property string text() const { return _text; }
@@ -57,10 +56,9 @@ class UserTextFrame : Frame
         assert(header.id == "TXXX");
         super(header);
         enforce(data.length > 0);
-        immutable encodingByte = data[0];
-        data = data[1 .. $];
-        _description = decodeString(data, encodingByte);
-        _text = decodeString(data, encodingByte);
+        immutable encodingByte = data.readByte();
+        _description = data.readString(encodingByte);
+        _text = data.readString(encodingByte);
     }
 
     @property string description() const { return _description; }
@@ -80,7 +78,7 @@ class LinkFrame : Frame
     {
         assert(header.id.length && header.id[0] == 'W' && header.id != "WXXX");
         super(header);
-        _link = decodeLatin1(data);
+        _link = data.readStringLatin1();
     }
 
     @property string link() const { return _link; }
@@ -99,10 +97,9 @@ class UserLinkFrame : Frame
         assert(header.id == "WXXX");
         super(header);
         enforce(data.length > 0);
-        immutable encodingByte = data[0];
-        data = data[1 .. $];
-        _description = decodeString(data, encodingByte);
-        _link = decodeLatin1(data);
+        immutable encodingByte = data.readByte();
+        _description = data.readString(encodingByte);
+        _link = data.readStringLatin1();
     }
 
     @property string description() const { return _description; }
@@ -203,14 +200,11 @@ class EventTimingCodeFrame : Frame
         assert(header.id == "ETCO");
         super(header);
         enforce(data.length >= 1);
-        _timeUnit = cast(TimeUnit)data[0];
-        data = data[1 .. $];
+        _timeUnit = cast(TimeUnit)data.readByte();
         while(data.length >= 5) {
-            _events ~= Event(
-                cast(EventType)data[0],
-                decodeBigEndian!uint(data[1 .. 5])
-            );
-            data = data[5 .. $];
+            auto type = cast(EventType)data.readByte();
+            auto time = data.readBigEndian!uint();
+            _events ~= Event(type, time);
         }
     }
 
@@ -246,18 +240,15 @@ class SyncTempoCodes : Frame
         assert(header.id == "SYTC");
         super(header);
         enforce(data.length > 1);
-        _timeUnit = cast(TimeUnit)data[0];
-        data = data[1 .. $];
+        _timeUnit = cast(TimeUnit)data.readByte();
         while(data.length >= 5) {
-            ushort bpm = data[0];
+            ushort bpm = data.readByte();
             if (bpm == 0xff) {
-                bpm += data[1];
-                data = data[1 .. $];
+                bpm += data.readByte();
                 if (data.length < 5) break;
             }
-            immutable time = decodeBigEndian!uint(data[1 .. 5]);
+            immutable time = data.readBigEndian!uint();
             _tempos ~= Tempo(bpm, time);
-            data = data[5 .. $];
         }
     }
 
@@ -280,11 +271,10 @@ class LyricsFrame : Frame
         assert(header.id == "USLT");
         super(header);
         enforce(data.length > 4);
-        immutable encodingByte = data[0];
-        _lang[] = data[1 .. 4];
-        data = data[4 .. $];
-        _content = decodeString(data, encodingByte);
-        _text = decodeString(data, encodingByte);
+        immutable encodingByte = data.readByte();
+        data.readBytes(_lang[]);
+        _content = data.readString(encodingByte);
+        _text = data.readString(encodingByte);
     }
 
     @property ubyte[3] lang() const { return _lang; }
@@ -329,17 +319,15 @@ class SyncLyricsFrame : Frame
         assert(header.id == "SYLT");
         super(header);
         enforce(data.length > 6);
-        immutable encodingByte = data[0];
-        _lang[] = data[1 .. 4];
-        _timeUnit = cast(TimeUnit)data[4];
-        _contentType = cast(ContentType)data[5];
-        data = data[6 .. $];
-        _content = decodeString(data, encodingByte);
+        immutable encodingByte = data.readByte();
+        data.readBytes(_lang[]);
+        _timeUnit = cast(TimeUnit)data.readByte();
+        _contentType = cast(ContentType)data.readByte();
+        _content = data.readString(encodingByte);
         while(data.length > 5) {
-            immutable text = decodeString(data, encodingByte);
+            immutable text = data.readString(encodingByte);
             if (data.length < 4) return;
-            immutable time =  decodeBigEndian!uint(data);
-            data = data[4 .. $];
+            immutable time =  data.readBigEndian!uint();
             _chunks ~= TextChunk(text, time);
         }
     }
@@ -368,11 +356,10 @@ class CommentsFrame : Frame
         assert(header.id == "COMM");
         super(header);
         enforce(data.length > 4);
-        immutable encodingByte = data[0];
-        _lang[] = data[1 .. 4];
-        data = data[4 .. $];
-        _content = decodeString(data, encodingByte);
-        _text = decodeString(data, encodingByte);
+        immutable encodingByte = data.readByte();
+        data.readBytes(_lang[]);
+        _content = data.readString(encodingByte);
+        _text = data.readString(encodingByte);
     }
 
     @property ubyte[3] lang() const { return _lang; }
@@ -416,19 +403,19 @@ class RelativeVolumeAdjustFrame : Frame
         _identification = decodeLatin1(data);
         while(data.length > 4)
         {
-            immutable ch = cast(Channel)data[0];
-            immutable volAdj = decodeBigEndian!short(data[1 .. 3]) / 512f;
-            immutable bitsPeak = data[3];
+            immutable ch = cast(Channel)data.readByte();
+            immutable volAdj = data.readBigEndian!short() / 512f;
+            immutable bitsPeak = data.readByte();
             immutable bytesForPeak = (bitsPeak + 7) / 8;
             immutable(ubyte)[] peak;
             if (bytesForPeak) {
+                import std.exception : assumeUnique;
                 if (data.length < bytesForPeak+4) break;
-                peak = data[4 .. 4+bytesForPeak].idup;
+                peak = assumeUnique(data.readBytes(new ubyte[bytesForPeak]));
             }
             _channelAdjusts ~= ChannelAdjust(
                 ch, volAdj, bitsPeak, peak
             );
-            data = data[4*bytesForPeak .. $];
         }
     }
 
@@ -464,16 +451,13 @@ class EqualisationFrame : Frame
     {
         assert(header.id == "EQU2");
         super(header);
-        _method = cast(InterpMethod)data[0];
-        data = data[1 .. $];
-        _identification = decodeLatin1(data);
+        _method = cast(InterpMethod)data.readByte();
+        _identification = data.readStringLatin1();
         while (data.length >= 4)
         {
-            _bands ~= Band(
-                decodeBigEndian!ushort(data[0 .. 2]) / 2f,
-                decodeBigEndian!short(data[2 .. 4]) / 512f,
-            );
-            data = data[4 .. $];
+            immutable float freq = data.readBigEndian!ushort() / 2f;
+            immutable float volAdj = data.readBigEndian!short() / 512f;
+            _bands ~= Band(freq, volAdj);
         }
     }
 
@@ -497,16 +481,16 @@ class ReverbFrame : Frame
         assert(header.id == "RVRB");
         super(header);
         enforce(data.length >= 12);
-        _delayLeft = decodeBigEndian!ushort(data[0 .. 2]);
-        _delayRight = decodeBigEndian!ushort(data[2 .. 4]);
-        _bouncesLeft = data[4];
-        _bouncesRight = data[5];
-        _feedbackLeftLeft = data[6];
-        _feedbackLeftRight = data[7];
-        _feedbackRightRight = data[8];
-        _feedbackRightLeft = data[9];
-        _premixLeftRight = data[10];
-        _premixRightLeft = data[11];
+        _delayLeft = data.readBigEndian!ushort();
+        _delayRight = data.readBigEndian!ushort();
+        _bouncesLeft = data.readByte();
+        _bouncesRight = data.readByte();
+        _feedbackLeftLeft = data.readByte();
+        _feedbackLeftRight = data.readByte();
+        _feedbackRightRight = data.readByte();
+        _feedbackRightLeft = data.readByte();
+        _premixLeftRight = data.readByte();
+        _premixRightLeft = data.readByte();
     }
 
     @property ushort delayLeft() const { return _delayLeft; }
@@ -566,12 +550,10 @@ class AttachedPictureFrame : Frame
     {
         assert(header.id == "APIC");
         super(header);
-        immutable encodingByte = data[0];
-        data = data[1 .. $];
-        _mimeType = decodeLatin1(data);
-        _pictureType = cast(PictureType)data[0];
-        data = data[1 .. $];
-        _description = decodeString(data, encodingByte);
+        immutable encodingByte = data.readByte();
+        _mimeType = data.readStringLatin1();
+        _pictureType = cast(PictureType)data.readByte();
+        _description = data.readString(encodingByte);
         _data = data.idup;
     }
 
@@ -595,11 +577,10 @@ class GeneralEncapsulatedObjectFrame : Frame
     {
         assert(header.id == "GEOB");
         super(header);
-        immutable encodingByte = data[0];
-        data = data[1 .. $];
-        _mimeType = decodeLatin1(data);
-        _filename = decodeString(data, encodingByte);
-        _description = decodeString(data, encodingByte);
+        immutable encodingByte = data.readByte();
+        _mimeType = data.readStringLatin1();
+        _filename = data.readString(encodingByte);
+        _description = data.readString(encodingByte);
         _objectData = data.idup;
     }
 
@@ -623,13 +604,14 @@ class PlayCounterFrame : Frame
     {
         assert(header.id == "PCNT");
         super(header);
-        _count = decodeBigEndian!size_t(data);
+        // FIXME: PCNT > uint.max
+        _count = data.readBigEndian!ulong();
     }
 
-    @property size_t count() const { return _count; }
+    @property ulong count() const { return _count; }
 
 private:
-    size_t _count;
+    ulong _count;
 }
 
 
@@ -641,19 +623,19 @@ class PopularimeterFrame : Frame
         assert(header.id == "POPM");
         super(header);
 
-        _email = decodeLatin1(data);
-        _rating = data[0];
-        _count = decodeBigEndian!size_t(data[1 .. $]);
+        _email = data.readStringLatin1();
+        _rating = data.readByte();
+        _count = data.readBigEndian!ulong();
     }
 
     @property string email() const { return _email; }
     @property ubyte rating() const { return _rating; }
-    @property size_t count() const { return _count; }
+    @property ulong count() const { return _count; }
 
 private:
     string _email;
     ubyte _rating;
-    size_t _count;
+    ulong _count;
 }
 
 
@@ -664,11 +646,11 @@ class AudioEncryptionFrame : Frame
     {
         assert(header.id == "AENC");
         super(header);
-        _owner = decodeLatin1(data);
+        _owner = data.readStringLatin1();
         enforce(data.length > 4);
-        _previewStart = decodeBigEndian!ushort(data[0 .. 2]);
-        _previewLength = decodeBigEndian!ushort(data[2 .. 4]);
-        _encryptionInfo = data[4 .. $].idup;
+        _previewStart = data.readBigEndian!ushort();
+        _previewLength = data.readBigEndian!ushort();
+        _encryptionInfo = data.idup;
     }
 
     @property string owner() const { return _owner; }
@@ -711,22 +693,20 @@ class CommercialFrame : Frame
         assert(header.id == "COMR");
         super(header);
         enforce(data.length >= 15);
-        immutable ubyte encodingByte = data[0];
-        data = data[1 .. $];
-        _price = decodeLatin1(data);
+        immutable ubyte encodingByte = data.readByte();
+        _price = data.readStringLatin1();
         enforce(data.length > 13);
         const date = cast(const(char)[])data[0 .. 8];
         _validUntil = Date(
             date[0 .. 4].to!int, date[4 .. 6].to!int, date[6 .. 8].to!int
         );
         data = data[8 .. $];
-        _contact = decodeLatin1(data);
+        _contact = data.readStringLatin1();
         enforce(data.length >= 4);
-        _receivedAs = cast(ReceivedAs)data[0];
-        data = data[1 .. $];
-        _seller = decodeString(data, encodingByte);
-        _description = decodeString(data, encodingByte);
-        _pictureMimeType = decodeLatin1(data);
+        _receivedAs = cast(ReceivedAs)data.readByte();
+        _seller = data.readString(encodingByte);
+        _description = data.readString(encodingByte);
+        _pictureMimeType = data.readStringLatin1();
         _pictureData = data.idup;
     }
 
@@ -760,7 +740,7 @@ class PrivateFrame : Frame
     {
         assert(header.id == "PRIV");
         super(header);
-        _owner = decodeLatin1(data);
+        _owner = data.readStringLatin1();
         _data = data.idup;
     }
 

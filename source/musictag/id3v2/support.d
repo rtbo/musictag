@@ -1,5 +1,7 @@
 module musictag.id3v2.support;
 
+import musictag.bitstream;
+
 import std.traits : isIntegral;
 import std.exception : enforce;
 
@@ -27,6 +29,44 @@ T decodeSynchSafeInt(T)(in ubyte[] data) if (isIntegral!T)
         result |= (d & 0x7f) << shift;
     }
     return result;
+}
+
+
+
+/// Transcodes the give bytes from the given encoding byte to utf-8.
+/// (specs/id3v2.4.0-structure.txt §4).
+/// Will read chars until a null char is found or until range exhausts.
+/// Do not check for valid Unicode.
+string readString(R)(ref R range, in ubyte encodingByte)
+{
+    switch(encodingByte)
+    {
+        case 0: return range.readStringLatin1();
+        case 1: return range.readStringUtf16Bom();
+        case 2: return range.readStringUtf16BE();
+        case 3: return range.readStringUtf8();
+        default: {
+            throw new Exception("Invalid ID3v2 text encoding byte");
+        }
+    }
+}
+
+/// Transcodes the give bytes from the given encoding byte to utf-8.
+/// (specs/id3v2.4.0-structure.txt §4).
+/// Will attempt to read up to len chars and stop if range exhausts.
+/// Do not check for valid Unicode.
+string readString(R)(ref R range, in ubyte encodingByte, in size_t len)
+{
+    switch(encodingByte)
+    {
+        case 0: return range.readStringLatin1(len);
+        case 1: return range.readStringUtf16Bom(len);
+        case 2: return range.readStringUtf16BE(len);
+        case 3: return range.readStringUtf8(len);
+        default: {
+            throw new Exception("Invalid ID3v2 text encoding byte");
+        }
+    }
 }
 
 
