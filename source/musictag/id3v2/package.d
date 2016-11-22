@@ -11,6 +11,8 @@ import std.exception : enforce;
 import std.bitmanip : bitfields;
 
 
+immutable(ubyte[]) streamPattern = ['I', 'D', '3'];
+
 Id3v2Tag readId3v2Tag(string filename, FrameFactoryDg factoryDg=null)
 {
     import std.stdio : File;
@@ -19,10 +21,10 @@ Id3v2Tag readId3v2Tag(string filename, FrameFactoryDg factoryDg=null)
 
 Id3v2Tag readId3v2Tag(R)(R range, FrameFactoryDg factoryDg=null)
 {
-    range.eatPattern(Id3v2Header.identifier[]);
+    range.eatPattern(streamPattern);
     enforce(!range.empty);
-    ubyte[Id3v2Header.size-Id3v2Header.identifier.length] headerData;
 
+    ubyte[Id3v2Header.size] headerData;
     auto header = Id3v2Header.parse(range.readBytes(headerData[]));
 
     auto tagData = range.readBytes(new ubyte[header.tagSize]);
@@ -172,7 +174,7 @@ private:
 }
 
 
-/// Id3v2 Header (§3.1)
+/// Id3v2 Header (§3.1).
 struct Id3v2Header
 {
     /// Fields as described in the header definition §3.1
@@ -190,17 +192,16 @@ struct Id3v2Header
     /// ditto
     @property size_t tagSize() const { return _tagSize; }
 
-    /// The size of the Id3v2 header (always 10)
-    enum size_t size = 10;
-    /// The identifier marking the start of the header preceding a Tag
-    static @property ubyte[3] identifier() { return ['I', 'D', '3']; }
+    /// The size of the Id3v2 header (always 7)
+    enum size_t size = 7;
 
     /// Parses bytes data into a header.
+    /// Assumes that data starts at first byte after "ID3".
     /// The data must start with identifier and have length >= size
     static Id3v2Header parse(const(ubyte)[] data)
     in
     {
-        assert(data.length >= size-identifier.length);
+        assert(data.length >= size);
     }
     body
     {
