@@ -6,6 +6,21 @@ import musictag.bitstream;
 
 import std.exception : enforce;
 
+class UnknownFrame : Frame
+{
+    this(const ref FrameHeader header, const(ubyte)[] data)
+    {
+        super(header);
+        data = _data.idup;
+    }
+    
+    @property immutable(ubyte)[] data() const { return _data; }
+
+private:
+    
+    immutable(ubyte)[] _data;
+}
+
 
 /// UFID id3v2 frame
 class UFIDFrame : Frame
@@ -45,6 +60,7 @@ class TextFrame : Frame
 private:
 
     string _text;
+
 }
 
 

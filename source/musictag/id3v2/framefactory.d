@@ -38,7 +38,8 @@ class DefaultFrameFactory : FrameFactory
         import std.exception : enforce;
 
         enforce(header.id.length == 4);
-        if (header.id == "UFID") return new UFIDFrame(header, data);
+        if (header.id == "UFID") 
+            return new UFIDFrame(header, data);
         else if (header.id[0] == 'T' && header.id != "TXXX")
             return new TextFrame(header, data);
         else if (header.id == "TXXX")
@@ -79,7 +80,8 @@ class DefaultFrameFactory : FrameFactory
             return new CommercialFrame(header, data);
         else if (header.id == "PRIV")
             return new PrivateFrame(header, data);
-        return null;
+        else
+            return new UnknownFrame(header, data);
     }
 
     // id3v2 version
