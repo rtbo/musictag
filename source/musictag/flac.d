@@ -36,7 +36,6 @@ FlacTag readFlacTag(string filename)
 FlacTag readFlacTag(R)(R source)
 if (isByteRange!R)
 {
-    import std.stdio;
     ubyte[] buf;
     // must be at the start of stream
     enforce(source.eatPattern(streamPattern) == streamPattern.length);
@@ -49,9 +48,6 @@ if (isByteRange!R)
     while (!source.empty)
     {
         immutable header = MetadataBlockHeader(source.readBigEndian!uint());
-        writefln("header.type = %s", header.type);
-        writefln("header.isLast = %s", header.isLast);
-        writefln("header.size = %s", header.size);
 
         buf.length = header.size;
         auto data = readBytes(source, buf);
@@ -65,7 +61,6 @@ if (isByteRange!R)
         {
             foundPicture = true;
             picture = PictureBlock(data);
-            writeln("picture size: ", picture.data.length);
         }
 
         if (foundComment && foundPicture) break;
