@@ -4,6 +4,7 @@ import musictag.xiph : XiphTag, XiphComment;
 import musictag.bitstream;
 
 import std.exception : enforce;
+import std.range.primitives;
 
 immutable(ubyte[]) streamPattern = ['f', 'L', 'a', 'C'];
 
@@ -70,7 +71,12 @@ if (isByteRange!R)
         if (foundComment && foundPicture) break;
         if (header.isLast) break;
     }
-    if (foundComment) return new FlacTag(comment, source.name, picture);
+    string filename;
+    static if(hasName!R)
+    {
+        filename = source.name;
+    }
+    if (foundComment) return new FlacTag(comment, filename, picture);
     else return null;
 }
 

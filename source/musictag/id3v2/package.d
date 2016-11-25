@@ -9,6 +9,7 @@ import musictag.bitstream;
 
 import std.exception : enforce;
 import std.bitmanip : bitfields;
+import std.range.primitives;
 
 
 immutable(ubyte[]) streamPattern = ['I', 'D', '3'];
