@@ -25,6 +25,9 @@ interface Tag {
     /// Track title
     @property string title() const;
 
+    /// Album name
+    @property string album() const;
+
     /// Track number
     /// Returns -1 if the track frame does not exist
     @property int track() const;

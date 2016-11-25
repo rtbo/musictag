@@ -37,6 +37,12 @@ class XiphTag : Tag
     }
 
     /// Ditto
+    @property string album() const
+    {
+        return comment["ALBUM"];
+    }
+
+    /// Ditto
     @property int track() const
     {
         auto trck = comment.test("TRACK");

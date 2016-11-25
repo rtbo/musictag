@@ -96,6 +96,12 @@ class Id3v2Tag : Tag
     }
 
     /// ditto
+    @property string album() const
+    {
+        return textFrame("TALB");
+    }
+
+    /// ditto
     @property string title() const
     {
         return textFrame("TIT2");
