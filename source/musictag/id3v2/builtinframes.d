@@ -13,11 +13,11 @@ class UnknownFrame : Frame
         super(header);
         data = _data.idup;
     }
-    
+
     @property immutable(ubyte)[] data() const { return _data; }
 
 private:
-    
+
     immutable(ubyte)[] _data;
 }
 
