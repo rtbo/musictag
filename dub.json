@@ -6,5 +6,6 @@
 	"description": "A library to encode and decode music files tags.",
 	"copyright": "Copyright © 2016, Rémi Thebault",
 	"license": "MIT",
-	"targetType": "library"
+	"targetType": "library",
+	"stringImportPaths": ["testdata"]
 }
