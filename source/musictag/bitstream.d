@@ -207,6 +207,9 @@ string readStringUtf8(R)(ref R range) if (isByteRange!R)
         res ~= range.front;
         range.popFront();
     }
+
+    if (!range.empty) range.popFront(); // eat null
+
     return assumeUnique(res);
 }
 
@@ -245,6 +248,8 @@ string readStringLatin1(R)(ref R range) if (isByteRange!R)
         res ~= buf[0 .. len];
         range.popFront();
     }
+
+    if (!range.empty) range.popFront(); // eat null
 
     return res;
 }
