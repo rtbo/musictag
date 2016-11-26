@@ -152,12 +152,23 @@ class Id3v2Tag : Tag
     }
 
     /// ditto
-    @property const(ubyte)[] picture() const { return []; }
+    @property const(ubyte)[] picture() const
+    {
+        auto apic = "APIC" in _frames;
+        if (apic)
+        {
+            import musictag.id3v2.builtinframes : AttachedPictureFrame;
+            auto f = cast(AttachedPictureFrame)(*apic);
+            return f.data;
+        }
+        return [];
+    }
 
     /// Get the value of a text frame
     @property string textFrame(string identifier) const {
         auto frame = identifier in _frames;
-        if (frame) {
+        if (frame)
+        {
             import musictag.id3v2.builtinframes : TextFrame;
             auto textFrame = cast(const(TextFrame))(*frame);
             if (textFrame) return textFrame.text;
